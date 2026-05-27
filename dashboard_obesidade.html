@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ObesityIQ Dashboard | POS TECH Fase 04</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:       #0B1120;
+  --surface:  #111827;
+  --card:     #1A2438;
+  --border:   #1F2D45;
+  --text:     #E2E8F0;
+  --muted:    #64748B;
+  --accent:   #3B82F6;
+  --accent2:  #06B6D4;
+  --green:    #10B981;
+  --yellow:   #F59E0B;
+  --orange:   #F97316;
+  --red:      #EF4444;
+  --red2:     #DC2626;
+  --red3:     #991B1B;
+  --grad:     linear-gradient(135deg, #1E40AF 0%, #0891B2 100%);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ── HEADER ──────────────────────────────────────────── */
+header {
+  background: linear-gradient(135deg, #0D1B2E 0%, #0F2248 50%, #0D1B2E 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 3rem 4rem 2.5rem;
+  position: relative;
+  overflow: hidden;
+}
+header::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 60% 80% at 80% 50%, rgba(59,130,246,0.12) 0%, transparent 70%);
+}
+.header-inner { position: relative; max-width: 1300px; margin: 0 auto; }
+.header-badge {
+  display: inline-block;
+  background: rgba(59,130,246,0.15);
+  border: 1px solid rgba(59,130,246,0.4);
+  color: #93C5FD;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.3rem 1rem;
+  border-radius: 999px;
+  margin-bottom: 1rem;
+}
+header h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+  line-height: 1.15;
+  background: linear-gradient(135deg, #E2E8F0 0%, #93C5FD 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.75rem;
+}
+header p.sub {
+  color: var(--muted);
+  font-size: 1rem;
+  max-width: 600px;
+}
+.header-meta {
+  margin-top: 1.5rem;
+  display: flex; gap: 1.5rem; flex-wrap: wrap;
+}
+.header-meta span {
+  font-size: 0.8rem; color: var(--muted);
+}
+.header-meta strong { color: var(--text); }
+
+/* ── MAIN ────────────────────────────────────────────── */
+main { max-width: 1300px; margin: 0 auto; padding: 3rem 2rem 4rem; }
+
+/* ── SECTION TITLE ───────────────────────────────────── */
+.section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 0.6rem;
+}
+.section-title .icon { font-size: 1.2rem; }
+
+/* ── KPI STRIP ────────────────────────────────────────── */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+.kpi {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.25rem 1.4rem;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.kpi:hover { transform: translateY(-3px); border-color: var(--accent); }
+.kpi .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; }
+.kpi .value { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--accent2); }
+.kpi .sub   { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; }
+
+/* ── GRID LAYOUTS ─────────────────────────────────────── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem; }
+.grid-1 { display: grid; grid-template-columns: 1fr; gap: 1.5rem; margin-bottom: 2.5rem; }
+.span-2 { grid-column: span 2; }
+
+/* ── CARD ─────────────────────────────────────────────── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 1.6rem 1.8rem;
+}
+.card-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 1.2rem;
+}
+.chart-wrap { position: relative; height: 280px; }
+.chart-wrap-tall { position: relative; height: 360px; }
+.chart-wrap-sm { position: relative; height: 200px; }
+
+/* ── INSIGHT CARDS ────────────────────────────────────── */
+.insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 2.5rem; }
+.insight-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.4rem 1.5rem;
+  border-left: 3px solid;
+  transition: transform 0.2s;
+}
+.insight-card:hover { transform: translateY(-2px); }
+.insight-card .ic-num {
+  font-family: 'Syne', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-bottom: 0.3rem;
+}
+.insight-card .ic-label { font-weight: 600; color: var(--text); margin-bottom: 0.4rem; }
+.insight-card .ic-desc  { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+
+/* ── CLASS BAR ────────────────────────────────────────── */
+.class-bars { display: flex; flex-direction: column; gap: 0.65rem; }
+.class-row  { display: flex; align-items: center; gap: 0.75rem; }
+.class-name { width: 155px; font-size: 0.82rem; color: var(--text); flex-shrink: 0; }
+.bar-track  { flex: 1; background: rgba(255,255,255,0.06); border-radius: 999px; height: 8px; }
+.bar-fill   { height: 8px; border-radius: 999px; transition: width 1s ease; }
+.bar-count  { width: 45px; text-align: right; font-size: 0.8rem; color: var(--muted); font-family: 'Syne', sans-serif; }
+
+/* ── MODEL SECTION ────────────────────────────────────── */
+.model-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem; }
+.perf-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.perf-table th {
+  text-align: left; padding: 0.5rem 0.75rem;
+  background: rgba(255,255,255,0.04);
+  color: var(--muted); font-weight: 600;
+  text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.08em;
+}
+.perf-table td { padding: 0.65rem 0.75rem; border-top: 1px solid var(--border); }
+.perf-table tr:last-child td { color: var(--accent2); font-weight: 700; }
+.badge {
+  display: inline-block; padding: 0.2rem 0.6rem;
+  border-radius: 6px; font-size: 0.75rem; font-weight: 700;
+}
+.badge-green { background: rgba(16,185,129,0.15); color: #10B981; }
+.badge-blue  { background: rgba(59,130,246,0.15); color: #93C5FD; }
+
+/* ── FOOTER ───────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 2rem 4rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  max-width: 1300px;
+  margin: 0 auto;
+}
+
+/* ── RESPONSIVE ───────────────────────────────────────── */
+@media (max-width: 768px) {
+  header { padding: 2rem 1.5rem; }
+  main   { padding: 2rem 1rem; }
+  .grid-2, .grid-3, .model-grid { grid-template-columns: 1fr; }
+  .span-2 { grid-column: span 1; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════ HEADER -->
+<header>
+  <div class="header-inner">
+    <div class="header-badge">POS TECH · Data Analytics · Tech Challenge Fase 04</div>
+    <h1>ObesityIQ Analytics<br>Dashboard</h1>
+    <p class="sub">Painel analítico com os principais insights obtidos no estudo de classificação de obesidade com Machine Learning.</p>
+    <div class="header-meta">
+      <span><strong>Autor:</strong> Leonardo Fernandes Sbardelotto</span>
+      <span><strong>Dataset:</strong> Obesity.csv — 2.111 registros</span>
+      <span><strong>Modelo:</strong> XGBoost · Acurácia 98.1%</span>
+      <span><strong>Classes:</strong> 7 níveis de obesidade</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════ MAIN -->
+<main>
+
+  <!-- ── KPIs ─────────────────────────────────────── -->
+  <div class="kpi-strip">
+    <div class="kpi">
+      <div class="label">Total de Pacientes</div>
+      <div class="value">2.111</div>
+      <div class="sub">registros analisados</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Acurácia XGBoost</div>
+      <div class="value">98,1%</div>
+      <div class="sub">Cross-val 5-fold: 98,6%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Com Obesidade</div>
+      <div class="value">45,8%</div>
+      <div class="sub">Tipos I, II e III somados</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Histórico Familiar</div>
+      <div class="value">81,8%</div>
+      <div class="sub">dos casos com excesso de peso</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Feature #1</div>
+      <div class="value">IMC</div>
+      <div class="sub">51,8% de importância</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Obesidade III</div>
+      <div class="value">100%</div>
+      <div class="sub">com histórico familiar</div>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO 1: Distribuição dos dados ─────────── -->
+  <div class="section-title"><span class="icon">📊</span> Distribuição das Classes de Obesidade</div>
+  <div class="grid-2" style="margin-bottom:2.5rem">
+
+    <div class="card">
+      <div class="card-title">Distribuição por Classe</div>
+      <div class="chart-wrap">
+        <canvas id="distChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Frequência das Classes</div>
+      <div class="class-bars" style="margin-top:0.5rem">
+        <div class="class-row">
+          <div class="class-name">Abaixo do Peso</div>
+          <div class="bar-track"><div class="bar-fill" style="width:77.6%;background:#06B6D4"></div></div>
+          <div class="bar-count">272</div>
+        </div>
+        <div class="class-row">
+          <div class="class-name">Peso Normal</div>
+          <div class="bar-track"><div class="bar-fill" style="width:81.9%;background:#10B981"></div></div>
+          <div class="bar-count">287</div>
+        </div>
+        <div class="class-row">
+          <div class="class-name">Sobrepeso I</div>
+          <div class="bar-track"><div class="bar-fill" style="width:82.8%;background:#F59E0B"></div></div>
+          <div class="bar-count">290</div>
+        </div>
+        <div class="class-row">
+          <div class="class-name">Sobrepeso II</div>
+          <div class="bar-track"><div class="bar-fill" style="width:82.8%;background:#F97316"></div></div>
+          <div class="bar-count">290</div>
+        </div>
+        <div class="class-row">
+          <div class="class-name">Obesidade Tipo I</div>
+          <div class="bar-track"><div class="bar-fill" style="width:100%;background:#EF4444"></div></div>
+          <div class="bar-count">351</div>
+        </div>
+        <div class="class-row">
+          <div class="class-name">Obesidade Tipo II</div>
+          <div class="bar-track"><div class="bar-fill" style="width:84.6%;background:#DC2626"></div></div>
+          <div class="bar-count">297</div>
+        </div>
+        <div class="class-row">
+          <div class="class-name">Obesidade Tipo III</div>
+          <div class="bar-track"><div class="bar-fill" style="width:92.3%;background:#991B1B"></div></div>
+          <div class="bar-count">324</div>
+        </div>
+      </div>
+      <p style="margin-top:1.2rem;font-size:0.8rem;color:var(--muted)">
+        O dataset é relativamente balanceado entre classes, com Obesidade Tipo I sendo a mais frequente (351 casos = 16,6%).
+        As classes de obesidade somadas representam <strong style="color:var(--text)">45,8%</strong> da amostra.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO 2: IMC por Classe ─────────────────── -->
+  <div class="section-title"><span class="icon">⚖️</span> IMC — O Principal Preditor</div>
+  <div class="grid-2" style="margin-bottom:2.5rem">
+
+    <div class="card">
+      <div class="card-title">IMC Médio por Classe de Obesidade</div>
+      <div class="chart-wrap">
+        <canvas id="bmiChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Importância das Features (XGBoost)</div>
+      <div class="chart-wrap">
+        <canvas id="fiChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO 3: Insights Chave ─────────────────── -->
+  <div class="section-title"><span class="icon">💡</span> Insights Clínicos Relevantes</div>
+  <div class="insights-grid">
+
+    <div class="insight-card" style="border-left-color:#EF4444">
+      <div class="ic-num" style="color:#EF4444">100%</div>
+      <div class="ic-label">Genética é determinante na Obesidade III</div>
+      <div class="ic-desc">Todos os pacientes classificados como Obesidade Tipo III possuem histórico familiar de sobrepeso, confirmando a forte hereditariedade da condição em casos severos.</div>
+    </div>
+
+    <div class="insight-card" style="border-left-color:#3B82F6">
+      <div class="ic-num" style="color:#3B82F6">51,8%</div>
+      <div class="ic-label">IMC explica metade da predição</div>
+      <div class="ic-desc">O Índice de Massa Corporal é, isoladamente, a feature mais importante no modelo XGBoost, com 51,8% de relevância — superando todas as outras variáveis comportamentais combinadas.</div>
+    </div>
+
+    <div class="insight-card" style="border-left-color:#06B6D4">
+      <div class="ic-num" style="color:#06B6D4">29,9%</div>
+      <div class="ic-label">Gênero: 2ª feature mais relevante</div>
+      <div class="ic-desc">Gênero é a segunda variável mais importante (29,9%). Homens dominam Obesidade Tipo II (295 vs. 2 mulheres), enquanto mulheres lideram Obesidade Tipo III (323 vs. 1 homem).</div>
+    </div>
+
+    <div class="insight-card" style="border-left-color:#10B981">
+      <div class="ic-num" style="color:#10B981">−38%</div>
+      <div class="ic-label">Atividade física cai progressivamente</div>
+      <div class="ic-desc">A frequência média de atividade física vai de 1,25 (Peso Normal) para apenas 0,64 (Obesidade III), uma redução de 38% — revelando a relação inversa clara entre sedentarismo e severidade da obesidade.</div>
+    </div>
+
+    <div class="insight-card" style="border-left-color:#F59E0B">
+      <div class="ic-num" style="color:#F59E0B">99,7%</div>
+      <div class="ic-label">Obesidade III e alimentos calóricos</div>
+      <div class="ic-desc">Quase a totalidade dos pacientes com Obesidade Tipo III (99,7%) relata consumo frequente de alimentos altamente calóricos, contra apenas 72,5% no grupo de Peso Normal.</div>
+    </div>
+
+    <div class="insight-card" style="border-left-color:#F97316">
+      <div class="ic-num" style="color:#F97316">23,4</div>
+      <div class="ic-label">Sobrepeso começa cedo: média de 23 anos</div>
+      <div class="ic-desc">A faixa de Sobrepeso I já aparece em pacientes com média de apenas 23,4 anos, indicando que intervenções preventivas precisam começar na adolescência e início da vida adulta.</div>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO 4: Fatores de Risco ───────────────── -->
+  <div class="section-title"><span class="icon">🔬</span> Análise de Fatores de Risco por Classe</div>
+  <div class="grid-3" style="margin-bottom:2.5rem">
+
+    <div class="card">
+      <div class="card-title">% com Histórico Familiar</div>
+      <div class="chart-wrap">
+        <canvas id="famChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Atividade Física Média (0–3)</div>
+      <div class="chart-wrap">
+        <canvas id="fafChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">% Consume Alimentos Calóricos</div>
+      <div class="chart-wrap">
+        <canvas id="favcChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO 5: Gênero & Idade ─────────────────── -->
+  <div class="section-title"><span class="icon">👥</span> Distribuição por Gênero e Idade</div>
+  <div class="grid-2" style="margin-bottom:2.5rem">
+
+    <div class="card">
+      <div class="card-title">Distribuição de Gênero por Classe</div>
+      <div class="chart-wrap-tall">
+        <canvas id="genderChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Idade Média por Classe</div>
+      <div class="chart-wrap-tall">
+        <canvas id="ageChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO 6: Modelo ──────────────────────────── -->
+  <div class="section-title"><span class="icon">🤖</span> Performance do Modelo de Machine Learning</div>
+  <div class="model-grid">
+    <div class="card">
+      <div class="card-title">Comparativo de Modelos</div>
+      <table class="perf-table">
+        <thead>
+          <tr>
+            <th>Modelo</th>
+            <th>Acc. Teste</th>
+            <th>Cross-Val (5-fold)</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Logistic Regression</td>
+            <td>83,7%</td>
+            <td>84,1% ± 1,2%</td>
+            <td><span class="badge badge-blue">Baseline</span></td>
+          </tr>
+          <tr>
+            <td>Random Forest</td>
+            <td>98,3%</td>
+            <td>98,4% ± 0,8%</td>
+            <td><span class="badge badge-green">Aprovado</span></td>
+          </tr>
+          <tr>
+            <td>XGBoost (Final)</td>
+            <td>98,1%</td>
+            <td>98,6% ± 0,7%</td>
+            <td><span class="badge badge-green">✓ Escolhido</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:1.5rem">
+        <div class="card-title">Precision / Recall por Classe (XGBoost)</div>
+        <div class="chart-wrap-sm">
+          <canvas id="prChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Por Que XGBoost?</div>
+      <div style="display:flex;flex-direction:column;gap:1rem;margin-top:0.5rem">
+        <div style="background:rgba(59,130,246,0.08);border-radius:12px;padding:1rem">
+          <div style="font-weight:600;color:var(--accent2);margin-bottom:0.3rem">Gradient Boosting</div>
+          <div style="font-size:0.82rem;color:var(--muted)">Combina múltiplas árvores de decisão sequencialmente, corrigindo os erros do modelo anterior.</div>
+        </div>
+        <div style="background:rgba(16,185,129,0.08);border-radius:12px;padding:1rem">
+          <div style="font-weight:600;color:var(--green);margin-bottom:0.3rem">Regularização L1/L2</div>
+          <div style="font-size:0.82rem;color:var(--muted)">Evita overfitting, tornando o modelo mais robusto para novos pacientes fora da amostra de treino.</div>
+        </div>
+        <div style="background:rgba(245,158,11,0.08);border-radius:12px;padding:1rem">
+          <div style="font-weight:600;color:var(--yellow);margin-bottom:0.3rem">Feature Importance Nativa</div>
+          <div style="font-size:0.82rem;color:var(--muted)">Exporta diretamente a importância de cada variável, auxiliando a equipe médica a compreender os fatores de risco.</div>
+        </div>
+        <div style="background:rgba(239,68,68,0.08);border-radius:12px;padding:1rem">
+          <div style="font-weight:600;color:var(--red);margin-bottom:0.3rem">Requerimento: &gt; 75%</div>
+          <div style="font-size:0.82rem;color:var(--muted)">O modelo XGBoost atingiu <strong style="color:var(--red)">98,1%</strong> de acurácia, superando o critério obrigatório do Tech Challenge em 23 p.p.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SEÇÃO 7: Recomendações ─────────────────── -->
+  <div class="section-title"><span class="icon">🏥</span> Recomendações para a Equipe Médica</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-bottom:2.5rem">
+
+    <div class="card" style="border-top:3px solid #EF4444">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;color:#EF4444;margin-bottom:0.75rem">🔴 Triagem por IMC</div>
+      <p style="font-size:0.85rem;color:var(--muted)">O IMC é o preditor mais forte (51,8% de importância). Implemente triagem de IMC obrigatória em consultas. Valores acima de 30 devem acionar protocolo de obesidade imediatamente.</p>
+    </div>
+
+    <div class="card" style="border-top:3px solid #F59E0B">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;color:#F59E0B;margin-bottom:0.75rem">🟡 Rastreio Familiar</div>
+      <p style="font-size:0.85rem;color:var(--muted)">100% dos casos de Obesidade III possuem histórico familiar. O rastreamento de familiares de primeiro grau de pacientes obesos deve ser protocolo padrão do hospital.</p>
+    </div>
+
+    <div class="card" style="border-top:3px solid #10B981">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;color:#10B981;margin-bottom:0.75rem">🟢 Prescrição de Atividade Física</div>
+      <p style="font-size:0.85rem;color:var(--muted)">A atividade física cai progressivamente conforme a severidade. Prescrições de exercício devem ser parte do tratamento desde o sobrepeso, antes que a obesidade se instale.</p>
+    </div>
+
+    <div class="card" style="border-top:3px solid #3B82F6">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;color:#3B82F6;margin-bottom:0.75rem">🔵 Intervenção Precoce</div>
+      <p style="font-size:0.85rem;color:var(--muted)">Sobrepeso já aparece com média de 23 anos. Programas de prevenção devem focar em jovens adultos (18–25 anos), especialmente aqueles com histórico familiar positivo.</p>
+    </div>
+
+    <div class="card" style="border-top:3px solid #06B6D4">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;color:#06B6D4;margin-bottom:0.75rem">🩵 Abordagem por Gênero</div>
+      <p style="font-size:0.85rem;color:var(--muted)">Homens concentram-se em Obesidade Tipo II; mulheres em Obesidade Tipo III. Protocolos específicos por gênero podem ser mais eficazes do que abordagens universais.</p>
+    </div>
+
+    <div class="card" style="border-top:3px solid #F97316">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;color:#F97316;margin-bottom:0.75rem">🟠 Educação Alimentar</div>
+      <p style="font-size:0.85rem;color:var(--muted)">99,7% dos pacientes Obesidade III consomem alimentos calóricos regularmente. Programas de reeducação alimentar devem ser parte central do tratamento, com acompanhamento nutricional contínuo.</p>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════ FOOTER -->
+<footer>
+  <p>ObesityIQ Analytics Dashboard · Tech Challenge Fase 04 · POS TECH Data Analytics</p>
+  <p style="margin-top:0.3rem">Leonardo Fernandes Sbardelotto · Dataset: Obesity.csv (2.111 registros) · Modelo: XGBoost 98,1% de acurácia</p>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════ SCRIPTS -->
+<script>
+const CLASSES     = ['Abaixo do Peso','Peso Normal','Sobrepeso I','Sobrepeso II','Obesidade I','Obesidade II','Obesidade III'];
+const COLORS      = ['#06B6D4','#10B981','#F59E0B','#F97316','#EF4444','#DC2626','#991B1B'];
+const COLORS_FADE = COLORS.map(c => c + '33');
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748B', font: { size: 11 } } },
+    y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#64748B', font: { size: 11 } } },
+  },
+};
+
+// 1. Distribuição
+new Chart(document.getElementById('distChart'), {
+  type: 'doughnut',
+  data: {
+    labels: CLASSES,
+    datasets: [{ data: [272, 287, 290, 290, 351, 297, 324], backgroundColor: COLORS, borderWidth: 3, borderColor: '#1A2438' }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'right', labels: { color: '#94A3B8', font: { size: 11 }, padding: 12 } }
+    },
+    cutout: '60%',
+  }
+});
+
+// 2. BMI por classe
+new Chart(document.getElementById('bmiChart'), {
+  type: 'bar',
+  data: {
+    labels: CLASSES,
+    datasets: [{
+      data: [17.40, 22.01, 25.99, 28.22, 32.26, 36.72, 42.27],
+      backgroundColor: COLORS,
+      borderRadius: 8, borderSkipped: false,
+    }]
+  },
+  options: {
+    ...CHART_DEFAULTS,
+    plugins: { ...CHART_DEFAULTS.plugins, tooltip: { callbacks: { label: ctx => ` IMC: ${ctx.parsed.y} kg/m²` } } },
+    scales: {
+      ...CHART_DEFAULTS.scales,
+      x: { ...CHART_DEFAULTS.scales.x, ticks: { color: '#64748B', font: { size: 10 }, maxRotation: 30 } },
+      y: { ...CHART_DEFAULTS.scales.y, title: { display: true, text: 'IMC (kg/m²)', color: '#64748B', font: { size: 11 } } },
+    }
+  }
+});
+
+// 3. Feature Importance
+const fiFeatures = ['IMC','Gênero','Nº Refeições','Transporte','FAVC','Hist. Familiar','Peso','Altura','Idade','Ativ. Física'];
+const fiValues   = [51.84, 29.94, 2.97, 1.88, 1.66, 1.33, 1.31, 1.23, 1.20, 1.17];
+new Chart(document.getElementById('fiChart'), {
+  type: 'bar',
+  data: {
+    labels: fiFeatures,
+    datasets: [{ data: fiValues, backgroundColor: '#3B82F6', borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    indexAxis: 'y',
+    ...CHART_DEFAULTS,
+    plugins: { ...CHART_DEFAULTS.plugins, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.x.toFixed(1)}%` } } },
+    scales: {
+      x: { ...CHART_DEFAULTS.scales.x, title: { display: true, text: 'Importância (%)', color: '#64748B', font: { size: 11 } } },
+      y: { ...CHART_DEFAULTS.scales.y, ticks: { color: '#94A3B8', font: { size: 11 } } },
+    }
+  }
+});
+
+// 4. Histórico Familiar
+new Chart(document.getElementById('famChart'), {
+  type: 'bar',
+  data: {
+    labels: CLASSES,
+    datasets: [{ data: [46.3, 54.0, 72.1, 93.8, 98.0, 99.7, 100.0], backgroundColor: COLORS, borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    ...CHART_DEFAULTS,
+    scales: {
+      ...CHART_DEFAULTS.scales,
+      x: { ...CHART_DEFAULTS.scales.x, ticks: { color: '#64748B', font: { size: 9 }, maxRotation: 35 } },
+      y: { ...CHART_DEFAULTS.scales.y, max: 100, title: { display: true, text: '%', color: '#64748B', font: { size: 11 } } },
+    }
+  }
+});
+
+// 5. FAF
+new Chart(document.getElementById('fafChart'), {
+  type: 'bar',
+  data: {
+    labels: CLASSES,
+    datasets: [{ data: [1.25, 1.25, 1.07, 0.96, 0.97, 0.98, 0.64], backgroundColor: COLORS, borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    ...CHART_DEFAULTS,
+    scales: {
+      ...CHART_DEFAULTS.scales,
+      x: { ...CHART_DEFAULTS.scales.x, ticks: { color: '#64748B', font: { size: 9 }, maxRotation: 35 } },
+      y: { ...CHART_DEFAULTS.scales.y, max: 2, title: { display: true, text: 'Escala 0–3', color: '#64748B', font: { size: 11 } } },
+    }
+  }
+});
+
+// 6. FAVC
+new Chart(document.getElementById('favcChart'), {
+  type: 'bar',
+  data: {
+    labels: CLASSES,
+    datasets: [{ data: [81.2, 72.5, 92.4, 74.5, 96.9, 97.6, 99.7], backgroundColor: COLORS, borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    ...CHART_DEFAULTS,
+    scales: {
+      ...CHART_DEFAULTS.scales,
+      x: { ...CHART_DEFAULTS.scales.x, ticks: { color: '#64748B', font: { size: 9 }, maxRotation: 35 } },
+      y: { ...CHART_DEFAULTS.scales.y, max: 100, title: { display: true, text: '%', color: '#64748B', font: { size: 11 } } },
+    }
+  }
+});
+
+// 7. Gênero stacked
+new Chart(document.getElementById('genderChart'), {
+  type: 'bar',
+  data: {
+    labels: CLASSES,
+    datasets: [
+      { label: 'Feminino', data: [173, 141, 145, 103, 156, 2, 323], backgroundColor: '#F472B6', borderRadius: 4 },
+      { label: 'Masculino', data: [99, 146, 145, 187, 195, 295, 1], backgroundColor: '#60A5FA', borderRadius: 4 },
+    ]
+  },
+  options: {
+    ...CHART_DEFAULTS,
+    plugins: { legend: { display: true, labels: { color: '#94A3B8', font: { size: 11 } } } },
+    scales: {
+      ...CHART_DEFAULTS.scales,
+      x: { ...CHART_DEFAULTS.scales.x, stacked: true, ticks: { color: '#64748B', font: { size: 10 }, maxRotation: 35 } },
+      y: { ...CHART_DEFAULTS.scales.y, stacked: true },
+    }
+  }
+});
+
+// 8. Idade
+new Chart(document.getElementById('ageChart'), {
+  type: 'line',
+  data: {
+    labels: CLASSES,
+    datasets: [{
+      data: [19.8, 21.7, 23.4, 27.0, 25.9, 28.2, 23.5],
+      borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,0.1)',
+      pointBackgroundColor: COLORS, pointRadius: 8, pointHoverRadius: 10,
+      fill: true, tension: 0.4, borderWidth: 2,
+    }]
+  },
+  options: {
+    ...CHART_DEFAULTS,
+    scales: {
+      ...CHART_DEFAULTS.scales,
+      x: { ...CHART_DEFAULTS.scales.x, ticks: { color: '#64748B', font: { size: 10 }, maxRotation: 35 } },
+      y: { ...CHART_DEFAULTS.scales.y, min: 15, max: 35, title: { display: true, text: 'Idade (anos)', color: '#64748B', font: { size: 11 } } },
+    }
+  }
+});
+
+// 9. Precision / Recall por classe
+new Chart(document.getElementById('prChart'), {
+  type: 'bar',
+  data: {
+    labels: CLASSES,
+    datasets: [
+      { label: 'Precision', data: [0.98, 0.98, 0.95, 1.00, 1.00, 0.97, 0.98], backgroundColor: '#3B82F6CC', borderRadius: 4 },
+      { label: 'Recall',    data: [1.00, 0.97, 0.98, 0.97, 0.99, 0.98, 0.98], backgroundColor: '#10B981CC', borderRadius: 4 },
+    ]
+  },
+  options: {
+    ...CHART_DEFAULTS,
+    plugins: { legend: { display: true, labels: { color: '#94A3B8', font: { size: 10 } } } },
+    scales: {
+      ...CHART_DEFAULTS.scales,
+      x: { ...CHART_DEFAULTS.scales.x, ticks: { color: '#64748B', font: { size: 9 }, maxRotation: 35 } },
+      y: { ...CHART_DEFAULTS.scales.y, min: 0.9, max: 1.0 },
+    }
+  }
+});
+</script>
+</body>
+</html>
