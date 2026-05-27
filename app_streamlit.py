@@ -593,186 +593,7 @@ if df_full is None:
 
 
 # ============================================================================
-# FORMULÁRIO NO TOPO (EXPANSÍVEL)
-# ============================================================================
-
-with st.expander("📋 Dados do Paciente — preencha para gerar análise individual", expanded=False):
-
-    # Linha 1 — antropométricos
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        gender = st.selectbox("Gênero biológico", ["Female", "Male"],
-                              format_func=lambda x: "Feminino" if x == "Female" else "Masculino")
-    with col2:
-        age = st.number_input("Idade (anos)", 14, 80, 25, 1)
-    with col3:
-        height = st.number_input("Altura (m)", 1.40, 2.20, 1.70, 0.01)
-    with col4:
-        weight = st.number_input("Peso (kg)", 30.0, 250.0, 70.0, 0.5)
-
-    bmi_preview = weight / (height ** 2)
-    bmi_cor, bmi_nome = bmi_class(bmi_preview)
-    st.markdown(
-        f"<div style='text-align:right; margin-top:-0.3rem; font-size:0.85rem;'>"
-        f"<span style='color:{C['muted']};'>IMC calculado:</span> "
-        f"<b style='color:{bmi_cor}; font-family:JetBrains Mono;'>{bmi_preview:.1f} kg/m²</b> "
-        f"<span style='color:{bmi_cor}; font-size:0.78rem;'>({bmi_nome})</span></div>",
-        unsafe_allow_html=True,
-    )
-
-    # Linha 2 — alimentação
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        family_history = st.selectbox("Histórico familiar de sobrepeso",
-                                      ["no", "yes"],
-                                      format_func=lambda x: "Não" if x == "no" else "Sim")
-    with col2:
-        favc = st.selectbox("Consome alimentos calóricos com frequência",
-                            ["no", "yes"],
-                            format_func=lambda x: "Não" if x == "no" else "Sim")
-    with col3:
-        fcvc = st.select_slider("Frequência de vegetais",
-                                options=[1, 2, 3], value=2,
-                                format_func=lambda x: {1:"Raramente",2:"Às vezes",3:"Sempre"}[x])
-    with col4:
-        ncp = st.slider("Refeições principais/dia", 1, 4, 3)
-
-    # Linha 3 — hábitos
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        caec = st.selectbox("Lanches entre refeições",
-                            ["no", "Sometimes", "Frequently", "Always"], index=1,
-                            format_func=lambda x: {"no":"Nunca","Sometimes":"Às vezes",
-                                                    "Frequently":"Frequentemente","Always":"Sempre"}[x])
-    with col2:
-        scc = st.selectbox("Monitora calorias",
-                           ["no", "yes"],
-                           format_func=lambda x: "Não" if x == "no" else "Sim")
-    with col3:
-        water_liters = st.slider("Água por dia (L)", 0.5, 4.0, 2.0, 0.5, format="%.1f L")
-    with col4:
-        activity_days = st.slider("Exercício (dias/semana)", 0, 7, 2)
-
-    # Linha 4 — estilo de vida
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        activity_intensity = st.selectbox("Intensidade do exercício",
-                                          ["leve", "moderada", "intensa"], index=1,
-                                          format_func=lambda x: x.capitalize())
-    with col2:
-        screen_hours = st.slider("Eletrônicos (horas/dia)", 0.0, 12.0, 4.0, 0.5, format="%.1f h")
-    with col3:
-        smoke = st.selectbox("Fuma", ["no", "yes"],
-                             format_func=lambda x: "Não" if x == "no" else "Sim")
-    with col4:
-        calc = st.selectbox("Consumo de álcool",
-                            ["no", "Sometimes", "Frequently", "Always"],
-                            format_func=lambda x: {"no":"Não bebo","Sometimes":"Socialmente",
-                                                    "Frequently":"Frequentemente","Always":"Diariamente"}[x])
-
-    # Linha 5 — transporte + botão
-    col1, col2 = st.columns([3, 2])
-    with col1:
-        mtrans = st.selectbox("Meio de transporte habitual",
-                              ["Public_Transportation", "Automobile", "Walking", "Motorbike", "Bike"],
-                              format_func=lambda x: {
-                                  "Public_Transportation":"🚌 Transporte Público","Automobile":"🚗 Carro",
-                                  "Walking":"🚶 A Pé","Motorbike":"🏍️ Moto","Bike":"🚴 Bicicleta"}[x])
-    with col2:
-        st.write("")
-        st.write("")
-        predict_btn = st.button("🔍 Analisar Paciente", use_container_width=True)
-
-    # converter valores para o modelo
-    ch2o = liters_to_ch2o(water_liters)
-    faf  = days_to_faf(activity_days)
-    tue  = hours_to_tue(screen_hours)
-
-    # ── Predição ────────────────────────────────────────────────
-    if predict_btn:
-        input_data = {
-            "Gender": gender, "Age": age, "Height": height, "Weight": weight,
-            "family_history": family_history, "FAVC": favc, "FCVC": fcvc,
-            "NCP": ncp, "CAEC": caec, "SMOKE": smoke, "CH2O": ch2o,
-            "SCC": scc, "FAF": faf, "TUE": tue, "CALC": calc, "MTRANS": mtrans,
-        }
-        try:
-            result = predict_single(input_data, model, meta)
-            st.session_state.ultima_predicao = result
-            st.session_state.dados_paciente = {
-                **input_data,
-                "water_liters": water_liters,
-                "activity_days": activity_days,
-                "activity_intensity": activity_intensity,
-                "screen_hours": screen_hours,
-                "bmi": bmi_preview,
-            }
-            label = result["label_pt"]
-            probs = result["probabilities"]
-            st.session_state.historico.append({
-                "Hora":        datetime.now().strftime("%H:%M:%S"),
-                "Gênero":      "M" if gender == "Male" else "F",
-                "Idade":       age,
-                "IMC":         round(bmi_preview, 1),
-                "Diagnóstico": label,
-                "Confiança":   f"{probs[label]:.1f}%",
-            })
-            st.success(f"✅ Análise concluída: **{label}** (Confiança: {probs[label]:.1f}%) — veja detalhes na aba 🩺 **Análise Clínica**")
-        except Exception as e:
-            st.error(f"Erro na predição: {e}")
-
-
-# ============================================================================
-# BARRA DE FILTROS GLOBAIS
-# ============================================================================
-
-st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
-fcol1, fcol2, fcol3, fcol4, fcol5 = st.columns([2, 2, 2, 2, 1])
-
-with fcol1:
-    f_genero = st.selectbox("Gênero", ["Todos", "Masculino", "Feminino"], key="f_gen")
-with fcol2:
-    f_faixa = st.selectbox("Faixa Etária", ["Todas", "14-25", "26-40", "41-60", "60+"], key="f_age")
-with fcol3:
-    f_classe = st.selectbox("Classificação",
-                            ["Todas", "Abaixo do Peso", "Peso Normal",
-                             "Sobrepeso I", "Sobrepeso II",
-                             "Obesidade I", "Obesidade II", "Obesidade III"], key="f_cls")
-with fcol4:
-    f_grupo = st.selectbox("Grupo de Risco",
-                           ["Todos", "Saudáveis (Normal)", "Risco Leve (Sobrepeso)",
-                            "Alto Risco (Obesidade)"], key="f_risk")
-with fcol5:
-    st.write("")
-    st.write("")
-    pdf_btn_placeholder = st.empty()
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-
-# ── Aplicar filtros ─────────────────────────────────────────────
-df = df_full.copy()
-if f_genero != "Todos":
-    df = df[df["Gênero_PT"] == f_genero]
-if f_faixa != "Todas":
-    df = df[df["Faixa Etária"] == f_faixa]
-if f_classe != "Todas":
-    df = df[df["Diagnóstico"] == f_classe]
-if f_grupo == "Saudáveis (Normal)":
-    df = df[df["Diagnóstico"] == "Peso Normal"]
-elif f_grupo == "Risco Leve (Sobrepeso)":
-    df = df[df["Diagnóstico"].isin(["Sobrepeso I", "Sobrepeso II"])]
-elif f_grupo == "Alto Risco (Obesidade)":
-    df = df[df["Diagnóstico"].isin(["Obesidade I", "Obesidade II", "Obesidade III"])]
-
-total = len(df)
-if total == 0:
-    st.warning("⚠️ Nenhum paciente atende aos filtros selecionados. Ajuste os filtros para visualizar os dados.")
-    st.stop()
-
-
-# ============================================================================
-# GERAÇÃO DO PDF
+# GERAÇÃO DO PDF (função reutilizada pela aba Visão Geral)
 # ============================================================================
 
 def gerar_pdf_dashboard(df_filtrado, filtros, meta, ultima_pred=None, dados_pac=None):
@@ -952,21 +773,6 @@ def gerar_pdf_dashboard(df_filtrado, filtros, meta, ultima_pred=None, dados_pac=
     return buf.getvalue()
 
 
-# ── Botão de PDF ───────────────────────────────────────────────
-with pdf_btn_placeholder.container():
-    pdf_bytes = gerar_pdf_dashboard(
-        df, {"genero": f_genero, "faixa": f_faixa, "classe": f_classe, "grupo": f_grupo},
-        meta, st.session_state.ultima_predicao, st.session_state.dados_paciente,
-    )
-    st.download_button(
-        "📥 PDF",
-        data=pdf_bytes,
-        file_name=f"obesityiq_relatorio_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-    )
-
-
 # ============================================================================
 # ABAS PRINCIPAIS
 # ============================================================================
@@ -985,254 +791,312 @@ tab_geral, tab_clinica, tab_insights, tab_hist, tab_sobre = st.tabs([
 # ╚════════════════════════════════════════════════════════════════════╝
 
 with tab_geral:
-    # ── KPIs MACRO ──────────────────────────────────────────────────
-    bmi_medio    = df["BMI"].mean()
-    alto_risco   = df["Diagnóstico"].isin(["Obesidade I","Obesidade II","Obesidade III"]).mean() * 100
-    n_predicoes  = len(st.session_state.historico)
-    idade_media  = df["Age"].mean()
+    # ── BARRA DE FILTROS GLOBAIS (escopo desta aba) ────────────────
+    st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
+    fcol1, fcol2, fcol3, fcol4, fcol5 = st.columns([2, 2, 2, 2, 1])
 
-    glow_kpis = [
-        ("#A855F7", "👥 PACIENTES",     f"{total:,}".replace(",", "."), "na amostra filtrada"),
-        ("#EC4899", "⚖️ IMC MÉDIO",     f"{bmi_medio:.1f}",              "kg/m²"),
-        ("#06B6D4", "🔴 ALTO RISCO",    f"{alto_risco:.1f}%",            "Obesidade I, II, III"),
-        ("#10B981", "🎯 ACURÁCIA",      f"{meta['model_accuracy']*100:.1f}%", "XGBoost"),
-        ("#F97316", "⚡ PREDIÇÕES",     f"{n_predicoes}",                "sessão atual"),
-    ]
-    cols = st.columns(5)
-    for col, (glow, label, value, sub) in zip(cols, glow_kpis):
-        with col:
-            st.markdown(f"""
-            <div class="kpi-card" style="--glow:{glow};">
-                <div class="kpi-label">{label}</div>
-                <div class="kpi-value">{value}</div>
-                <div class="kpi-sub">{sub}</div>
-            </div>
-            """, unsafe_allow_html=True)
+    with fcol1:
+        f_genero = st.selectbox("Gênero", ["Todos", "Masculino", "Feminino"], key="f_gen")
+    with fcol2:
+        f_faixa = st.selectbox("Faixa Etária", ["Todas", "14-25", "26-40", "41-60", "60+"], key="f_age")
+    with fcol3:
+        f_classe = st.selectbox("Classificação",
+                                ["Todas", "Abaixo do Peso", "Peso Normal",
+                                 "Sobrepeso I", "Sobrepeso II",
+                                 "Obesidade I", "Obesidade II", "Obesidade III"], key="f_cls")
+    with fcol4:
+        f_grupo = st.selectbox("Grupo de Risco",
+                               ["Todos", "Saudáveis (Normal)", "Risco Leve (Sobrepeso)",
+                                "Alto Risco (Obesidade)"], key="f_risk")
+    with fcol5:
+        st.write("")
+        st.write("")
+        pdf_btn_placeholder = st.empty()
 
-    # ── FUNIL DE SEVERIDADE ─────────────────────────────────────────
-    st.markdown('<div class="section-title">Progressão pela Severidade — Funil Clínico</div>',
-                unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    dist = df["Diagnóstico"].value_counts()
-    n_total = len(df)
-    def pct(c): return (dist.get(c, 0) / n_total * 100) if n_total else 0
+    # ── Aplicar filtros ────────────────────────────────────────────
+    df = df_full.copy()
+    if f_genero != "Todos":
+        df = df[df["Gênero_PT"] == f_genero]
+    if f_faixa != "Todas":
+        df = df[df["Faixa Etária"] == f_faixa]
+    if f_classe != "Todas":
+        df = df[df["Diagnóstico"] == f_classe]
+    if f_grupo == "Saudáveis (Normal)":
+        df = df[df["Diagnóstico"] == "Peso Normal"]
+    elif f_grupo == "Risco Leve (Sobrepeso)":
+        df = df[df["Diagnóstico"].isin(["Sobrepeso I", "Sobrepeso II"])]
+    elif f_grupo == "Alto Risco (Obesidade)":
+        df = df[df["Diagnóstico"].isin(["Obesidade I", "Obesidade II", "Obesidade III"])]
 
-    p_normal    = pct("Peso Normal")
-    p_sobr_i    = pct("Sobrepeso I")
-    p_sobr_ii   = pct("Sobrepeso II")
-    p_obesidade = pct("Obesidade I") + pct("Obesidade II") + pct("Obesidade III")
+    total = len(df)
+    if total == 0:
+        st.warning("⚠️ Nenhum paciente atende aos filtros selecionados. "
+                   "Ajuste os filtros para visualizar os dados.")
+    else:
+        # ── Botão de PDF (alimentado pelos filtros desta aba) ─────
+        with pdf_btn_placeholder.container():
+            pdf_bytes = gerar_pdf_dashboard(
+                df, {"genero": f_genero, "faixa": f_faixa, "classe": f_classe, "grupo": f_grupo},
+                meta, st.session_state.ultima_predicao, st.session_state.dados_paciente,
+            )
+            st.download_button(
+                "📥 PDF",
+                data=pdf_bytes,
+                file_name=f"obesityiq_relatorio_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
 
-    funil_data = [
-        ("#10B981", "Peso Normal", "Saudável",           p_normal,    p_normal),
-        ("#FBBF24", "Sobrepeso I", "Pré-obesidade",      p_sobr_i,    p_normal + p_sobr_i),
-        ("#F97316", "Sobrepeso II", "Início do risco",   p_sobr_ii,   p_normal + p_sobr_i + p_sobr_ii),
-        ("#EF4444", "Obesidade",   "Alto risco clínico", p_obesidade, 100.0),
-    ]
-    cols = st.columns(4)
-    for col, (glow, etapa, sub, etapa_pct, acum_pct) in zip(cols, funil_data):
-        with col:
-            st.markdown(f"""
-            <div class="funnel-card" style="--glow:{glow};">
-                <div class="funnel-title"><b>{etapa}</b> · {sub}</div>
-                <div class="funnel-stats">
-                    <div class="funnel-stat">
-                        <span class="funnel-stat-label">Etapa</span>
-                        <span class="funnel-stat-value">{etapa_pct:.1f}%</span>
-                    </div>
-                    <div class="funnel-stat">
-                        <span class="funnel-stat-label">Acumulado</span>
-                        <span class="funnel-stat-value" style="color:{C['text_2']};">{acum_pct:.1f}%</span>
+        # ── KPIs MACRO ─────────────────────────────────────────────
+        bmi_medio    = df["BMI"].mean()
+        alto_risco   = df["Diagnóstico"].isin(["Obesidade I","Obesidade II","Obesidade III"]).mean() * 100
+        n_predicoes  = len(st.session_state.historico)
+        idade_media  = df["Age"].mean()
+
+        glow_kpis = [
+            ("#A855F7", "👥 PACIENTES",     f"{total:,}".replace(",", "."), "na amostra filtrada"),
+            ("#EC4899", "⚖️ IMC MÉDIO",     f"{bmi_medio:.1f}",              "kg/m²"),
+            ("#06B6D4", "🔴 ALTO RISCO",    f"{alto_risco:.1f}%",            "Obesidade I, II, III"),
+            ("#10B981", "🎯 ACURÁCIA",      f"{meta['model_accuracy']*100:.1f}%", "XGBoost"),
+            ("#F97316", "⚡ PREDIÇÕES",     f"{n_predicoes}",                "sessão atual"),
+        ]
+        cols = st.columns(5)
+        for col, (glow, label, value, sub) in zip(cols, glow_kpis):
+            with col:
+                st.markdown(f"""
+                <div class="kpi-card" style="--glow:{glow};">
+                    <div class="kpi-label">{label}</div>
+                    <div class="kpi-value">{value}</div>
+                    <div class="kpi-sub">{sub}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # ── FUNIL DE SEVERIDADE ─────────────────────────────────────
+        st.markdown('<div class="section-title">Progressão pela Severidade — Funil Clínico</div>',
+                    unsafe_allow_html=True)
+
+        dist = df["Diagnóstico"].value_counts()
+        n_total = len(df)
+        def pct(c): return (dist.get(c, 0) / n_total * 100) if n_total else 0
+
+        p_normal    = pct("Peso Normal")
+        p_sobr_i    = pct("Sobrepeso I")
+        p_sobr_ii   = pct("Sobrepeso II")
+        p_obesidade = pct("Obesidade I") + pct("Obesidade II") + pct("Obesidade III")
+
+        funil_data = [
+            ("#10B981", "Peso Normal", "Saudável",           p_normal,    p_normal),
+            ("#FBBF24", "Sobrepeso I", "Pré-obesidade",      p_sobr_i,    p_normal + p_sobr_i),
+            ("#F97316", "Sobrepeso II", "Início do risco",   p_sobr_ii,   p_normal + p_sobr_i + p_sobr_ii),
+            ("#EF4444", "Obesidade",   "Alto risco clínico", p_obesidade, 100.0),
+        ]
+        cols = st.columns(4)
+        for col, (glow, etapa, sub, etapa_pct, acum_pct) in zip(cols, funil_data):
+            with col:
+                st.markdown(f"""
+                <div class="funnel-card" style="--glow:{glow};">
+                    <div class="funnel-title"><b>{etapa}</b> · {sub}</div>
+                    <div class="funnel-stats">
+                        <div class="funnel-stat">
+                            <span class="funnel-stat-label">Etapa</span>
+                            <span class="funnel-stat-value">{etapa_pct:.1f}%</span>
+                        </div>
+                        <div class="funnel-stat">
+                            <span class="funnel-stat-label">Acumulado</span>
+                            <span class="funnel-stat-value" style="color:{C['text_2']};">{acum_pct:.1f}%</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-    st.markdown(
-        f"<div class='chart-caption'>"
-        f"<b>Como ler:</b> <b>Etapa</b> = % de pacientes naquela classe. "
-        f"<b>Acumulado</b> = % de pacientes até aquela classe (somatório). "
-        f"Filtros ativos: {total} pacientes da amostra.</div>",
-        unsafe_allow_html=True,
-    )
+        st.markdown(
+            f"<div class='chart-caption'>"
+            f"<b>Como ler:</b> <b>Etapa</b> = % de pacientes naquela classe. "
+            f"<b>Acumulado</b> = % de pacientes até aquela classe (somatório). "
+            f"Filtros ativos: {total} pacientes da amostra.</div>",
+            unsafe_allow_html=True,
+        )
 
-    # ── BREAKDOWN POR DIMENSÃO ──────────────────────────────────────
-    st.markdown('<div class="section-title">Detalhamento por Dimensão Clínica</div>',
-                unsafe_allow_html=True)
+        # ── BREAKDOWN POR DIMENSÃO ─────────────────────────────────
+        st.markdown('<div class="section-title">Detalhamento por Dimensão Clínica</div>',
+                    unsafe_allow_html=True)
 
-    bd_cols = st.columns(5)
+        bd_cols = st.columns(5)
 
-    # 1. Por Classe
-    with bd_cols[0]:
-        rows = ""
-        for c in TARGET_LABELS_PT:
-            q = int(dist.get(c, 0))
-            pc = (q/n_total*100) if n_total else 0
-            cor = CLASS_COLORS[c]
-            rows += (
-                f"<div class='bd-row'>"
-                f"<div class='left'><span class='bd-dot' style='background:{cor};'></span>{c}</div>"
-                f"<div><span class='bd-value'>{q}</span><span class='bd-pct'>{pc:.1f}%</span></div>"
-                f"</div>"
-                f"<div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{cor};width:{pc}%;'></div></div>"
-            )
-        st.markdown(f"""
-        <div class="bd-card">
-            <div class="bd-title">📊 Por Classe</div>
-            <div class="bd-subtitle">Distribuição diagnóstica</div>
-            {rows}
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 2. Por Gênero
-    with bd_cols[1]:
-        gdist = df["Gênero_PT"].value_counts()
-        gm, gf = gdist.get("Masculino", 0), gdist.get("Feminino", 0)
-        gm_pct = (gm/n_total*100) if n_total else 0
-        gf_pct = (gf/n_total*100) if n_total else 0
-        st.markdown(f"""
-        <div class="bd-card">
-            <div class="bd-title">👤 Por Gênero</div>
-            <div class="bd-subtitle">Masculino vs Feminino</div>
-            <div class='bd-row'>
-                <div class='left'><span class='bd-dot' style='background:{C['cyan']};'></span>Masculino</div>
-                <div><span class='bd-value'>{gm}</span><span class='bd-pct'>{gm_pct:.1f}%</span></div>
-            </div>
-            <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['cyan']};width:{gm_pct}%;'></div></div>
-            <div class='bd-row'>
-                <div class='left'><span class='bd-dot' style='background:{C['magenta']};'></span>Feminino</div>
-                <div><span class='bd-value'>{gf}</span><span class='bd-pct'>{gf_pct:.1f}%</span></div>
-            </div>
-            <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['magenta']};width:{gf_pct}%;'></div></div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 3. Hábito Calórico
-    with bd_cols[2]:
-        cm = (df["FAVC"]=="yes").sum()
-        cn = (df["FAVC"]=="no").sum()
-        cm_pct = (cm/n_total*100) if n_total else 0
-        cn_pct = (cn/n_total*100) if n_total else 0
-        st.markdown(f"""
-        <div class="bd-card">
-            <div class="bd-title">🍔 Hábito Calórico</div>
-            <div class="bd-subtitle">Consumo de calóricos</div>
-            <div class='bd-row'>
-                <div class='left'><span class='bd-dot' style='background:{C['red']};'></span>Consome frequente</div>
-                <div><span class='bd-value'>{cm}</span><span class='bd-pct'>{cm_pct:.1f}%</span></div>
-            </div>
-            <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['red']};width:{cm_pct}%;'></div></div>
-            <div class='bd-row'>
-                <div class='left'><span class='bd-dot' style='background:{C['green']};'></span>Não consome</div>
-                <div><span class='bd-value'>{cn}</span><span class='bd-pct'>{cn_pct:.1f}%</span></div>
-            </div>
-            <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['green']};width:{cn_pct}%;'></div></div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 4. Atividade Física
-    with bd_cols[3]:
-        faf_labels = {0: "Sedentário", 1: "Baixa freq.", 2: "Regular", 3: "Atleta"}
-        faf_cors   = {0: C['red'], 1: C['orange'], 2: C['green'], 3: C['cyan']}
-        rows = ""
-        for k in [0, 1, 2, 3]:
-            q = (df["FAF"]==k).sum()
-            p = (q/n_total*100) if n_total else 0
-            rows += (
-                f"<div class='bd-row'>"
-                f"<div class='left'><span class='bd-dot' style='background:{faf_cors[k]};'></span>{faf_labels[k]}</div>"
-                f"<div><span class='bd-value'>{q}</span><span class='bd-pct'>{p:.1f}%</span></div></div>"
-                f"<div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{faf_cors[k]};width:{p}%;'></div></div>"
-            )
-        st.markdown(f"""
-        <div class="bd-card">
-            <div class="bd-title">🏃 Atividade Física</div>
-            <div class="bd-subtitle">Frequência semanal</div>
-            {rows}
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 5. Genética
-    with bd_cols[4]:
-        gm = (df["family_history"]=="yes").sum()
-        gn = (df["family_history"]=="no").sum()
-        gm_pct = (gm/n_total*100) if n_total else 0
-        gn_pct = (gn/n_total*100) if n_total else 0
-        st.markdown(f"""
-        <div class="bd-card">
-            <div class="bd-title">🧬 Genética</div>
-            <div class="bd-subtitle">Histórico familiar</div>
-            <div class='bd-row'>
-                <div class='left'><span class='bd-dot' style='background:{C['purple']};'></span>Com histórico</div>
-                <div><span class='bd-value'>{gm}</span><span class='bd-pct'>{gm_pct:.1f}%</span></div>
-            </div>
-            <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['purple']};width:{gm_pct}%;'></div></div>
-            <div class='bd-row'>
-                <div class='left'><span class='bd-dot' style='background:{C['muted']};'></span>Sem histórico</div>
-                <div><span class='bd-value'>{gn}</span><span class='bd-pct'>{gn_pct:.1f}%</span></div>
-            </div>
-            <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['muted']};width:{gn_pct}%;'></div></div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # ── INDICADORES CLÍNICOS (mini cards) ───────────────────────────
-    st.markdown('<div class="section-title">Indicadores Clínicos Médios</div>',
-                unsafe_allow_html=True)
-
-    # mapeia transporte mais comum
-    mt_top = df["MTRANS"].value_counts().idxmax() if total else "—"
-    mt_map = {"Public_Transportation": "Público", "Automobile": "Carro",
-              "Walking": "A Pé", "Motorbike": "Moto", "Bike": "Bicicleta"}
-
-    mini_data = [
-        ("#A855F7", "👤", "Idade Média",     f"{df['Age'].mean():.1f}",        "anos"),
-        ("#06B6D4", "📏", "Altura Média",    f"{df['Height'].mean():.2f}",     "m"),
-        ("#EC4899", "⚖️", "Peso Médio",      f"{df['Weight'].mean():.1f}",     "kg"),
-        ("#3B82F6", "💧", "Água",            f"{df['CH2O'].mean():.1f}",       "nível 1-3"),
-        ("#10B981", "🍽️", "Refeições",       f"{df['NCP'].mean():.1f}",        "por dia"),
-        ("#F97316", "📱", "Tela",            f"{df['TUE'].mean():.1f}",        "nível 0-2"),
-        ("#FBBF24", "🚌", "Transporte+",     mt_map.get(mt_top, mt_top),       f"{(df['MTRANS']==mt_top).mean()*100:.0f}% da amostra"),
-    ]
-    cols = st.columns(7)
-    for col, (glow, icon, label, value, sub) in zip(cols, mini_data):
-        with col:
+        # 1. Por Classe
+        with bd_cols[0]:
+            rows = ""
+            for c in TARGET_LABELS_PT:
+                q = int(dist.get(c, 0))
+                pc = (q/n_total*100) if n_total else 0
+                cor = CLASS_COLORS[c]
+                rows += (
+                    f"<div class='bd-row'>"
+                    f"<div class='left'><span class='bd-dot' style='background:{cor};'></span>{c}</div>"
+                    f"<div><span class='bd-value'>{q}</span><span class='bd-pct'>{pc:.1f}%</span></div>"
+                    f"</div>"
+                    f"<div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{cor};width:{pc}%;'></div></div>"
+                )
             st.markdown(f"""
-            <div class="mini-card" style="--glow:{glow};">
-                <div class="mini-icon">{icon}</div>
-                <div class="mini-label">{label}</div>
-                <div class="mini-value">{value}</div>
-                <div class="mini-sub">{sub}</div>
+            <div class="bd-card">
+                <div class="bd-title">📊 Por Classe</div>
+                <div class="bd-subtitle">Distribuição diagnóstica</div>
+                {rows}
             </div>
             """, unsafe_allow_html=True)
 
-    # ── GRÁFICO DE DISTRIBUIÇÃO POR CLASSE x GÊNERO ───────────────
-    st.markdown('<div class="section-title">Distribuição Detalhada por Classe e Gênero</div>',
-                unsafe_allow_html=True)
+        # 2. Por Gênero
+        with bd_cols[1]:
+            gdist = df["Gênero_PT"].value_counts()
+            gm, gf = gdist.get("Masculino", 0), gdist.get("Feminino", 0)
+            gm_pct = (gm/n_total*100) if n_total else 0
+            gf_pct = (gf/n_total*100) if n_total else 0
+            st.markdown(f"""
+            <div class="bd-card">
+                <div class="bd-title">👤 Por Gênero</div>
+                <div class="bd-subtitle">Masculino vs Feminino</div>
+                <div class='bd-row'>
+                    <div class='left'><span class='bd-dot' style='background:{C['cyan']};'></span>Masculino</div>
+                    <div><span class='bd-value'>{gm}</span><span class='bd-pct'>{gm_pct:.1f}%</span></div>
+                </div>
+                <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['cyan']};width:{gm_pct}%;'></div></div>
+                <div class='bd-row'>
+                    <div class='left'><span class='bd-dot' style='background:{C['magenta']};'></span>Feminino</div>
+                    <div><span class='bd-value'>{gf}</span><span class='bd-pct'>{gf_pct:.1f}%</span></div>
+                </div>
+                <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['magenta']};width:{gf_pct}%;'></div></div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    cross = df.groupby(["Diagnóstico", "Gênero_PT"]).size().reset_index(name="qtd")
-    cross["Diagnóstico"] = pd.Categorical(cross["Diagnóstico"], categories=TARGET_LABELS_PT, ordered=True)
-    cross = cross.sort_values("Diagnóstico")
+        # 3. Hábito Calórico
+        with bd_cols[2]:
+            cm = (df["FAVC"]=="yes").sum()
+            cn = (df["FAVC"]=="no").sum()
+            cm_pct = (cm/n_total*100) if n_total else 0
+            cn_pct = (cn/n_total*100) if n_total else 0
+            st.markdown(f"""
+            <div class="bd-card">
+                <div class="bd-title">🍔 Hábito Calórico</div>
+                <div class="bd-subtitle">Consumo de calóricos</div>
+                <div class='bd-row'>
+                    <div class='left'><span class='bd-dot' style='background:{C['red']};'></span>Consome frequente</div>
+                    <div><span class='bd-value'>{cm}</span><span class='bd-pct'>{cm_pct:.1f}%</span></div>
+                </div>
+                <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['red']};width:{cm_pct}%;'></div></div>
+                <div class='bd-row'>
+                    <div class='left'><span class='bd-dot' style='background:{C['green']};'></span>Não consome</div>
+                    <div><span class='bd-value'>{cn}</span><span class='bd-pct'>{cn_pct:.1f}%</span></div>
+                </div>
+                <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['green']};width:{cn_pct}%;'></div></div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    fig_cross = px.bar(
-        cross, x="Diagnóstico", y="qtd", color="Gênero_PT", barmode="group",
-        color_discrete_map={"Masculino": C['cyan'], "Feminino": C['magenta']},
-        labels={"qtd": "Pacientes", "Diagnóstico": "Classificação"},
-    )
-    fig_cross.update_layout(
-        plot_bgcolor=C['surface'], paper_bgcolor=C['surface'],
-        font=dict(family="Inter", color=C['text']),
-        legend=dict(orientation="h", y=1.12),
-        height=380, margin=dict(t=30, b=30),
-        xaxis=dict(gridcolor=C['border'], color=C['text_2']),
-        yaxis=dict(gridcolor=C['border'], color=C['text_2']),
-    )
-    st.plotly_chart(fig_cross, use_container_width=True)
-    st.markdown(
-        f"<div class='chart-caption'><b>Como ler:</b> barras lado a lado por classe. "
-        f"<b>Cálculo:</b> contagem de pacientes em cada combinação Diagnóstico × Gênero "
-        f"({total} pacientes na amostra filtrada). <b>Insight:</b> Obesidade Tipo II é predominante "
-        f"em homens, enquanto Obesidade Tipo III predomina em mulheres.</div>",
-        unsafe_allow_html=True,
-    )
+        # 4. Atividade Física
+        with bd_cols[3]:
+            faf_labels = {0: "Sedentário", 1: "Baixa freq.", 2: "Regular", 3: "Atleta"}
+            faf_cors   = {0: C['red'], 1: C['orange'], 2: C['green'], 3: C['cyan']}
+            rows = ""
+            for k in [0, 1, 2, 3]:
+                q = (df["FAF"]==k).sum()
+                p = (q/n_total*100) if n_total else 0
+                rows += (
+                    f"<div class='bd-row'>"
+                    f"<div class='left'><span class='bd-dot' style='background:{faf_cors[k]};'></span>{faf_labels[k]}</div>"
+                    f"<div><span class='bd-value'>{q}</span><span class='bd-pct'>{p:.1f}%</span></div></div>"
+                    f"<div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{faf_cors[k]};width:{p}%;'></div></div>"
+                )
+            st.markdown(f"""
+            <div class="bd-card">
+                <div class="bd-title">🏃 Atividade Física</div>
+                <div class="bd-subtitle">Frequência semanal</div>
+                {rows}
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 5. Genética
+        with bd_cols[4]:
+            gm = (df["family_history"]=="yes").sum()
+            gn = (df["family_history"]=="no").sum()
+            gm_pct = (gm/n_total*100) if n_total else 0
+            gn_pct = (gn/n_total*100) if n_total else 0
+            st.markdown(f"""
+            <div class="bd-card">
+                <div class="bd-title">🧬 Genética</div>
+                <div class="bd-subtitle">Histórico familiar</div>
+                <div class='bd-row'>
+                    <div class='left'><span class='bd-dot' style='background:{C['purple']};'></span>Com histórico</div>
+                    <div><span class='bd-value'>{gm}</span><span class='bd-pct'>{gm_pct:.1f}%</span></div>
+                </div>
+                <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['purple']};width:{gm_pct}%;'></div></div>
+                <div class='bd-row'>
+                    <div class='left'><span class='bd-dot' style='background:{C['muted']};'></span>Sem histórico</div>
+                    <div><span class='bd-value'>{gn}</span><span class='bd-pct'>{gn_pct:.1f}%</span></div>
+                </div>
+                <div class='bd-bar'><div class='bd-bar-fill' style='--bar-color:{C['muted']};width:{gn_pct}%;'></div></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── INDICADORES CLÍNICOS (mini cards) ──────────────────────
+        st.markdown('<div class="section-title">Indicadores Clínicos Médios</div>',
+                    unsafe_allow_html=True)
+
+        # mapeia transporte mais comum
+        mt_top = df["MTRANS"].value_counts().idxmax() if total else "—"
+        mt_map = {"Public_Transportation": "Público", "Automobile": "Carro",
+                  "Walking": "A Pé", "Motorbike": "Moto", "Bike": "Bicicleta"}
+
+        mini_data = [
+            ("#A855F7", "👤", "Idade Média",     f"{df['Age'].mean():.1f}",        "anos"),
+            ("#06B6D4", "📏", "Altura Média",    f"{df['Height'].mean():.2f}",     "m"),
+            ("#EC4899", "⚖️", "Peso Médio",      f"{df['Weight'].mean():.1f}",     "kg"),
+            ("#3B82F6", "💧", "Água",            f"{df['CH2O'].mean():.1f}",       "nível 1-3"),
+            ("#10B981", "🍽️", "Refeições",       f"{df['NCP'].mean():.1f}",        "por dia"),
+            ("#F97316", "📱", "Tela",            f"{df['TUE'].mean():.1f}",        "nível 0-2"),
+            ("#FBBF24", "🚌", "Transporte+",     mt_map.get(mt_top, mt_top),       f"{(df['MTRANS']==mt_top).mean()*100:.0f}% da amostra"),
+        ]
+        cols = st.columns(7)
+        for col, (glow, icon, label, value, sub) in zip(cols, mini_data):
+            with col:
+                st.markdown(f"""
+                <div class="mini-card" style="--glow:{glow};">
+                    <div class="mini-icon">{icon}</div>
+                    <div class="mini-label">{label}</div>
+                    <div class="mini-value">{value}</div>
+                    <div class="mini-sub">{sub}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # ── GRÁFICO DE DISTRIBUIÇÃO POR CLASSE x GÊNERO ───────────
+        st.markdown('<div class="section-title">Distribuição Detalhada por Classe e Gênero</div>',
+                    unsafe_allow_html=True)
+
+        cross = df.groupby(["Diagnóstico", "Gênero_PT"]).size().reset_index(name="qtd")
+        cross["Diagnóstico"] = pd.Categorical(cross["Diagnóstico"], categories=TARGET_LABELS_PT, ordered=True)
+        cross = cross.sort_values("Diagnóstico")
+
+        fig_cross = px.bar(
+            cross, x="Diagnóstico", y="qtd", color="Gênero_PT", barmode="group",
+            color_discrete_map={"Masculino": C['cyan'], "Feminino": C['magenta']},
+            labels={"qtd": "Pacientes", "Diagnóstico": "Classificação"},
+        )
+        fig_cross.update_layout(
+            plot_bgcolor=C['surface'], paper_bgcolor=C['surface'],
+            font=dict(family="Inter", color=C['text']),
+            legend=dict(orientation="h", y=1.12),
+            height=380, margin=dict(t=30, b=30),
+            xaxis=dict(gridcolor=C['border'], color=C['text_2']),
+            yaxis=dict(gridcolor=C['border'], color=C['text_2']),
+        )
+        st.plotly_chart(fig_cross, use_container_width=True)
+        st.markdown(
+            f"<div class='chart-caption'><b>Como ler:</b> barras lado a lado por classe. "
+            f"<b>Cálculo:</b> contagem de pacientes em cada combinação Diagnóstico × Gênero "
+            f"({total} pacientes na amostra filtrada). <b>Insight:</b> Obesidade Tipo II é predominante "
+            f"em homens, enquanto Obesidade Tipo III predomina em mulheres.</div>",
+            unsafe_allow_html=True,
+        )
 
 
 # ╔════════════════════════════════════════════════════════════════════╗
@@ -1240,13 +1104,162 @@ with tab_geral:
 # ╚════════════════════════════════════════════════════════════════════╝
 
 with tab_clinica:
+    # ── FORMULÁRIO DO PACIENTE (escopo desta aba) ──────────────────
+    with st.expander("📋 Dados do Paciente — preencha para gerar análise individual", expanded=True):
+
+        # Linha 0 — Identificação
+        col_nome, _ = st.columns([3, 1])
+        with col_nome:
+            nome_paciente = st.text_input(
+                "Nome / Identificador do Paciente",
+                value="",
+                placeholder="Ex: Prontuário 1234",
+                key="paciente_nome",
+            )
+            st.markdown(
+                f"<div style='color:{C['muted']}; font-size:0.75rem; margin-top:-0.6rem; margin-bottom:0.4rem;'>"
+                f"🔒 Apenas identificação local nesta sessão. Nada é armazenado em servidor.</div>",
+                unsafe_allow_html=True,
+            )
+
+        # Linha 1 — antropométricos
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            gender = st.selectbox("Gênero biológico", ["Female", "Male"],
+                                  format_func=lambda x: "Feminino" if x == "Female" else "Masculino")
+        with col2:
+            age = st.number_input("Idade (anos)", 14, 80, 25, 1)
+        with col3:
+            height = st.number_input("Altura (m)", 1.40, 2.20, 1.70, 0.01)
+        with col4:
+            weight = st.number_input("Peso (kg)", 30.0, 250.0, 70.0, 0.5)
+
+        bmi_preview = weight / (height ** 2)
+        bmi_cor, bmi_nome = bmi_class(bmi_preview)
+        st.markdown(
+            f"<div style='text-align:right; margin-top:-0.3rem; font-size:0.85rem;'>"
+            f"<span style='color:{C['muted']};'>IMC calculado:</span> "
+            f"<b style='color:{bmi_cor}; font-family:JetBrains Mono;'>{bmi_preview:.1f} kg/m²</b> "
+            f"<span style='color:{bmi_cor}; font-size:0.78rem;'>({bmi_nome})</span></div>",
+            unsafe_allow_html=True,
+        )
+
+        # Linha 2 — alimentação
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            family_history = st.selectbox("Histórico familiar de sobrepeso",
+                                          ["no", "yes"],
+                                          format_func=lambda x: "Não" if x == "no" else "Sim")
+        with col2:
+            favc = st.selectbox("Consome alimentos calóricos com frequência",
+                                ["no", "yes"],
+                                format_func=lambda x: "Não" if x == "no" else "Sim")
+        with col3:
+            fcvc = st.select_slider("Frequência de vegetais",
+                                    options=[1, 2, 3], value=2,
+                                    format_func=lambda x: {1:"Raramente",2:"Às vezes",3:"Sempre"}[x])
+        with col4:
+            ncp = st.slider("Refeições principais/dia", 1, 4, 3)
+
+        # Linha 3 — hábitos
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            caec = st.selectbox("Lanches entre refeições",
+                                ["no", "Sometimes", "Frequently", "Always"], index=1,
+                                format_func=lambda x: {"no":"Nunca","Sometimes":"Às vezes",
+                                                        "Frequently":"Frequentemente","Always":"Sempre"}[x])
+        with col2:
+            scc = st.selectbox("Monitora calorias",
+                               ["no", "yes"],
+                               format_func=lambda x: "Não" if x == "no" else "Sim")
+        with col3:
+            water_liters = st.slider("Água por dia (L)", 0.5, 4.0, 2.0, 0.5, format="%.1f L")
+        with col4:
+            activity_days = st.slider("Exercício (dias/semana)", 0, 7, 2)
+
+        # Linha 4 — estilo de vida
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            activity_intensity = st.selectbox("Intensidade do exercício",
+                                              ["leve", "moderada", "intensa"], index=1,
+                                              format_func=lambda x: x.capitalize())
+        with col2:
+            screen_hours = st.slider("Eletrônicos (horas/dia)", 0.0, 12.0, 4.0, 0.5, format="%.1f h")
+        with col3:
+            smoke = st.selectbox("Fuma", ["no", "yes"],
+                                 format_func=lambda x: "Não" if x == "no" else "Sim")
+        with col4:
+            calc = st.selectbox("Consumo de álcool",
+                                ["no", "Sometimes", "Frequently", "Always"],
+                                format_func=lambda x: {"no":"Não bebo","Sometimes":"Socialmente",
+                                                        "Frequently":"Frequentemente","Always":"Diariamente"}[x])
+
+        # Linha 5 — transporte + botão
+        col1, col2 = st.columns([3, 2])
+        with col1:
+            mtrans = st.selectbox("Meio de transporte habitual",
+                                  ["Public_Transportation", "Automobile", "Walking", "Motorbike", "Bike"],
+                                  format_func=lambda x: {
+                                      "Public_Transportation":"🚌 Transporte Público","Automobile":"🚗 Carro",
+                                      "Walking":"🚶 A Pé","Motorbike":"🏍️ Moto","Bike":"🚴 Bicicleta"}[x])
+        with col2:
+            st.write("")
+            st.write("")
+            predict_btn = st.button("🔍 Analisar Paciente", use_container_width=True)
+
+        # converter valores para o modelo
+        ch2o = liters_to_ch2o(water_liters)
+        faf  = days_to_faf(activity_days)
+        tue  = hours_to_tue(screen_hours)
+
+        # ── Predição ────────────────────────────────────────────────
+        if predict_btn:
+            input_data = {
+                "Gender": gender, "Age": age, "Height": height, "Weight": weight,
+                "family_history": family_history, "FAVC": favc, "FCVC": fcvc,
+                "NCP": ncp, "CAEC": caec, "SMOKE": smoke, "CH2O": ch2o,
+                "SCC": scc, "FAF": faf, "TUE": tue, "CALC": calc, "MTRANS": mtrans,
+            }
+            try:
+                result_pred = predict_single(input_data, model, meta)
+                st.session_state.ultima_predicao = result_pred
+                nome_clean = (nome_paciente or "").strip()
+                st.session_state.dados_paciente = {
+                    **input_data,
+                    "nome": nome_clean,
+                    "water_liters": water_liters,
+                    "activity_days": activity_days,
+                    "activity_intensity": activity_intensity,
+                    "screen_hours": screen_hours,
+                    "bmi": bmi_preview,
+                }
+                label_pred = result_pred["label_pt"]
+                probs_pred = result_pred["probabilities"]
+                st.session_state.historico.append({
+                    "Hora":        datetime.now().strftime("%H:%M:%S"),
+                    "Paciente":    nome_clean if nome_clean else "—",
+                    "Gênero":      "M" if gender == "Male" else "F",
+                    "Idade":       age,
+                    "IMC":         round(bmi_preview, 1),
+                    "Diagnóstico": label_pred,
+                    "Confiança":   f"{probs_pred[label_pred]:.1f}%",
+                })
+                quem = nome_clean if nome_clean else "Paciente"
+                st.success(
+                    f"✅ {quem} classificado como **{label_pred}** "
+                    f"({probs_pred[label_pred]:.1f}% de confiança) — role para baixo."
+                )
+            except Exception as e:
+                st.error(f"Erro na predição: {e}")
+
+    # ── RESULTADO ──────────────────────────────────────────────────
     if st.session_state.ultima_predicao is None:
         st.markdown(f"""
         <div class="info-card" style="--glow:{C['primary']};">
-            <h4>🩺 Nenhuma análise individual gerada</h4>
-            <p>Preencha os <b>Dados do Paciente</b> no topo da página (expanda o formulário) e
-            clique em <b>Analisar Paciente</b>. O resultado aparecerá nesta aba com diagnóstico,
-            probabilidades, contexto clínico e recomendações médicas.</p>
+            <h4>🩺 Nenhuma análise individual gerada ainda</h4>
+            <p>Preencha o formulário acima e clique em <b>Analisar Paciente</b>.
+            O resultado aparecerá abaixo com diagnóstico, probabilidades, contexto clínico
+            e recomendações médicas.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -1280,6 +1293,8 @@ with tab_clinica:
                 ["Avaliação imediata para bariátrica", "Equipe multidisciplinar completa", "Internação para tratamento", "Monitoramento intensivo"]),
         }
         risco, nivel, cor, desc, recs = RISK[label]
+        nome_show = (dp.get("nome") or "").strip() if isinstance(dp, dict) else ""
+        titulo_h1 = f"{nome_show} · {label}" if nome_show else label
 
         # ── CARD DE RESULTADO ───────────────────────────────────────
         col_r, col_k = st.columns([2, 1])
@@ -1288,7 +1303,7 @@ with tab_clinica:
             <div class="result-card" style="--glow:{cor};
                 background: linear-gradient(135deg, {cor}EE 0%, {cor} 100%);">
                 <div class="label">Diagnóstico Preditivo</div>
-                <h1>{label}</h1>
+                <h1>{titulo_h1}</h1>
                 <div class="label" style="margin-top:0.6rem;">{risco} · Nível {nivel}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -1393,15 +1408,22 @@ with tab_clinica:
 # ╚════════════════════════════════════════════════════════════════════╝
 
 with tab_insights:
-    st.markdown(
-        "<div class='ml-explain'><b>O que é XGBoost?</b> "
-        "Algoritmo de aprendizado de máquina que combina centenas de árvores de decisão "
-        "sequencialmente, cada uma corrigindo os erros das anteriores. Padrão-ouro em problemas tabulares.</div>",
-        unsafe_allow_html=True,
-    )
+    # ── 1. Breve descrição dos 3 modelos ─────────────────────────
+    st.markdown('<div class="section-title">Algoritmos Avaliados</div>',
+                unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="info-card" style="--glow:{C['cyan']};">
+        <p><b style="color:{C['muted']};">Logistic Regression</b> — baseline linear; assume relações
+        lineares entre as variáveis e a log-odds da classe. Simples, rápido, mas limitado em padrões não-lineares.</p>
+        <p><b style="color:{C['primary']};">Random Forest</b> — ensemble de centenas de árvores independentes
+        que votam por maioria; robusto a ruído e captura interações não-lineares.</p>
+        <p><b style="color:{C['cyan']};">XGBoost <i>(escolhido)</i></b> — árvores sequenciais com gradient
+        boosting; cada árvore corrige o erro da anterior. Padrão-ouro em problemas tabulares com regularização nativa.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # ── Comparativo dos modelos ──────────────────────────────────
-    st.markdown('<div class="section-title">Comparativo de Desempenho dos Modelos</div>',
+    # ── 2. Comparativo dos modelos ───────────────────────────────
+    st.markdown('<div class="section-title">Comparativo de Desempenho</div>',
                 unsafe_allow_html=True)
 
     modelos = pd.DataFrame({
@@ -1435,7 +1457,37 @@ with tab_insights:
         unsafe_allow_html=True,
     )
 
-    # ── Feature importance ───────────────────────────────────────
+    # ── 3. Explicação das variáveis ──────────────────────────────
+    st.markdown('<div class="section-title">Variáveis do Modelo (16 features)</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        "<div class='ml-explain'>Cada paciente é descrito por estas 16 variáveis. "
+        "Combinadas, alimentam o XGBoost para gerar o diagnóstico em 7 classes.</div>",
+        unsafe_allow_html=True,
+    )
+
+    variaveis_df = pd.DataFrame([
+        ("BMI",            "Índice de Massa Corporal (Peso ÷ Altura²) — derivado",     "Numérica"),
+        ("Gender",         "Gênero biológico (Female / Male)",                          "Binária"),
+        ("Age",            "Idade do paciente em anos",                                 "Numérica"),
+        ("Height",         "Altura em metros",                                          "Numérica"),
+        ("Weight",         "Peso em quilogramas",                                       "Numérica"),
+        ("family_history", "Histórico familiar de sobrepeso (sim/não)",                 "Binária"),
+        ("FAVC",           "Consome alimentos calóricos com frequência (sim/não)",      "Binária"),
+        ("FCVC",           "Frequência de vegetais nas refeições (1-3)",                "Ordinal"),
+        ("NCP",            "Número de refeições principais por dia (1-4)",              "Numérica"),
+        ("CAEC",           "Lanches entre refeições (Nunca / Às vezes / Freq / Sempre)", "Ordinal"),
+        ("SMOKE",          "Fumante (sim/não)",                                         "Binária"),
+        ("CH2O",           "Consumo de água diário (1-3 → <1L, 1-2L, >2L)",             "Ordinal"),
+        ("SCC",            "Monitora consumo de calorias (sim/não)",                    "Binária"),
+        ("FAF",            "Atividade física semanal (0-3 → sedentário a atleta)",      "Ordinal"),
+        ("TUE",            "Tempo de uso de eletrônicos (0-2 → 0-2h, 3-5h, >5h)",       "Ordinal"),
+        ("CALC",           "Consumo de álcool (Não / Social / Freq / Diário)",          "Ordinal"),
+        ("MTRANS",         "Meio de transporte habitual (5 categorias)",                "Nominal"),
+    ], columns=["Variável", "Descrição clínica", "Tipo"])
+    st.dataframe(variaveis_df, use_container_width=True, hide_index=True)
+
+    # ── 4. Feature importance ────────────────────────────────────
     st.markdown('<div class="section-title">Importância das Variáveis (XGBoost)</div>',
                 unsafe_allow_html=True)
     st.markdown(
@@ -1465,27 +1517,6 @@ with tab_insights:
     )
     st.plotly_chart(fig_fi, use_container_width=True)
 
-    # ── Insights principais ──────────────────────────────────────
-    st.markdown('<div class="section-title">Principais Achados Clínicos</div>',
-                unsafe_allow_html=True)
-    ins = [
-        ("#A855F7", "🏋️ IMC é o preditor #1", "51,8% das decisões. Confirma a validade do indicador OMS calculado por peso ÷ altura²."),
-        ("#EC4899", "👤 Gênero é o #2",       "29,9% de importância. Homens concentram Obesidade II, mulheres concentram Obesidade III."),
-        ("#06B6D4", "🧬 Genética determinante", "100% dos casos de Obesidade III têm histórico familiar de sobrepeso."),
-        ("#10B981", "🏃 Sedentarismo progressivo", "Atividade física cai 38% do grupo Normal para o grupo Obesidade III."),
-        ("#F97316", "🍔 Alimentação calórica",  "99,7% dos casos de Obesidade III consomem alimentos calóricos frequentemente."),
-        ("#FBBF24", "📅 Início precoce",        "Sobrepeso aparece em média aos 23,4 anos. Intervenção jovem é essencial."),
-    ]
-    cols = st.columns(3)
-    for i, (glow, t, d) in enumerate(ins):
-        with cols[i % 3]:
-            st.markdown(f"""
-            <div class="info-card" style="--glow:{glow};">
-                <h4>{t}</h4>
-                <p>{d}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
 
 # ╔════════════════════════════════════════════════════════════════════╗
 # ║ ABA 4 — HISTÓRICO                                                   ║
@@ -1502,11 +1533,19 @@ with tab_hist:
         st.markdown(f"""
         <div class="info-card" style="--glow:{C['primary']};">
             <h4>📋 Histórico vazio</h4>
-            <p>Nenhuma análise registrada ainda. Use o formulário no topo para começar.</p>
+            <p>Nenhuma análise registrada ainda. Vá para a aba 🩺 <b>Análise Clínica</b>,
+            preencha os dados do paciente e clique em <b>Analisar</b>.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
         df_h = pd.DataFrame(st.session_state.historico)
+        # garante coluna Paciente (retrocompat para entradas antigas sem ela)
+        if "Paciente" not in df_h.columns:
+            df_h["Paciente"] = "—"
+        df_h["Paciente"] = df_h["Paciente"].fillna("—").replace("", "—")
+        # ordem desejada
+        col_order = ["Hora", "Paciente", "Gênero", "Idade", "IMC", "Diagnóstico", "Confiança"]
+        df_h = df_h[[c for c in col_order if c in df_h.columns]]
         df_h.index = range(1, len(df_h) + 1)
         df_h.index.name = "#"
         st.dataframe(df_h, use_container_width=True)
@@ -1549,19 +1588,33 @@ with tab_hist:
 # ╚════════════════════════════════════════════════════════════════════╝
 
 with tab_sobre:
+    # ── Linha 1: Objetivo em destaque (full-width) ─────────────────
+    st.markdown(f"""
+    <div class="info-card" style="--glow:{C['cyan']};
+        padding: 1.6rem 1.8rem; border-left: 5px solid {C['cyan']};">
+        <h4 style="font-size:1.25rem; margin-bottom:0.6rem;">🎯 Objetivo</h4>
+        <p style="font-size:1rem; line-height:1.55;">
+            Sistema de <b>apoio à decisão clínica</b> que classifica pacientes em
+            <b>7 níveis de obesidade</b> a partir de <b>16 variáveis</b> clínicas e comportamentais.
+            Foco em <b>identificação precoce</b> de risco metabólico para
+            direcionar intervenções personalizadas em ambiente hospitalar.<br><br>
+            Desenvolvido para o <b>Tech Challenge Fase 04</b> — POS TECH Data Analytics (FIAP).
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Linha 2: Dataset | Modelo ─────────────────────────────────
     col1, col2 = st.columns(2)
     with col1:
         st.markdown(f"""
-        <div class="info-card" style="--glow:{C['cyan']};">
-            <h4>🎯 Objetivo</h4>
-            <p>Sistema de apoio à decisão clínica que classifica pacientes em 7 níveis de obesidade
-            a partir de 16 variáveis. Desenvolvido para o Tech Challenge Fase 04 — POS TECH Data Analytics.</p>
-        </div>
         <div class="info-card" style="--glow:{C['purple']};">
             <h4>📊 Dataset</h4>
             <p>2.111 pacientes · 17 colunas · 0 valores ausentes. Origem: UCI ML Repository.
             7 classes balanceadas entre 272 e 351 pacientes por classe.</p>
         </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
         <div class="info-card" style="--glow:{C['green']};">
             <h4>🧠 Modelo</h4>
             <p>XGBoost · 300 árvores · profundidade 6 · learning rate 0,1.
@@ -1569,7 +1622,9 @@ with tab_sobre:
         </div>
         """, unsafe_allow_html=True)
 
-    with col2:
+    # ── Linha 3: Feature Eng | Stack | Aviso Médico ───────────────
+    col1, col2, col3 = st.columns(3)
+    with col1:
         st.markdown(f"""
         <div class="info-card" style="--glow:{C['orange']};">
             <h4>🔧 Feature Engineering</h4>
@@ -1578,11 +1633,17 @@ with tab_sobre:
             • Encoding ordinal: CAEC, CALC<br>
             • Target ordenado por severidade clínica</p>
         </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
         <div class="info-card" style="--glow:{C['magenta']};">
             <h4>⚙️ Stack Técnica</h4>
             <p>Python 3.14 · scikit-learn · XGBoost · Pandas · Plotly · Streamlit · ReportLab.
             Deploy: Streamlit Community Cloud.</p>
         </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"""
         <div class="info-card" style="--glow:{C['red']};">
             <h4>⚠️ Aviso Médico</h4>
             <p>Sistema de <b>apoio</b> à decisão. <b>Não substitui</b> avaliação médica presencial.
