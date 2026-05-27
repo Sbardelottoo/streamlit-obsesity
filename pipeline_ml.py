@@ -175,8 +175,7 @@ def train_models(X_train, X_test, y_train, y_test) -> dict:
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
         acc_test = accuracy_score(y_test, preds)
-        cv_scores = cross_val_score(model, pd.concat([X_train, X_test]),
-                                    pd.concat([y_train, y_test]),
+        cv_scores = cross_val_score(model, X_train, y_train,
                                     cv=cv, scoring="accuracy")
         results[name] = {
             "model": model,

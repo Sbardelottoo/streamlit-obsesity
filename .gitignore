@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Ambientes virtuais
+venv/
+.venv/
+env/
+.env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit cache
+.streamlit/secrets.toml
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Arquivos gerados pelo pipeline (grandes demais para o Git normal)
+# ⚠️ COMENTE as linhas abaixo se quiser versionar o modelo treinado
+# model_xgb.pkl
+# model_meta.json
+
+# Gráficos gerados
+avaliacao_modelo.png
+
+# Logs
+*.log

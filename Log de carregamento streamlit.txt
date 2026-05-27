@@ -1,0 +1,102 @@
+
+[     UTC     ] Logs for app-obsesity-yzsuicy6wbllvuwzxp8h3x.streamlit.app/
+────────────────────────────────────────────────────────────────────────────────────────
+[00:40:48] 🖥 Provisioning machine...
+[00:40:48] 🎛 Preparing system...
+[00:40:48] ⛓ Spinning up manager process...
+[00:36:43] 🚀 Starting up repository: 'streamlit-obsesity', branch: 'main', main module: 'app_streamlit.py'
+[00:36:43] 🐙 Cloning repository...
+[00:36:44] 🐙 Cloning into '/mount/src/streamlit-obsesity'...
+
+[00:36:44] 🐙 Cloned repository!
+[00:36:44] 🐙 Pulling code changes from Github...
+[00:36:44] 📦 Processing dependencies...
+
+──────────────────────────────────────── uv ───────────────────────────────────────────
+
+Using uv pip install.
+Using Python 3.14.5 environment at /home/adminuser/venv
+Resolved 54 packages in 550ms
+  × Failed to download and build `scikit-learn==1.4.2`
+  ├─▶ Failed to resolve requirements from `build-system.requires`
+  ├─▶ No solution found when resolving: `setuptools`, `wheel`,
+  │   `cython>=3.0.8`, `numpy==2.0.0rc1`, `scipy>=1.6.0`
+  ╰─▶ Because there is no version of numpy==2.0.0rc1 and you require
+      numpy==2.0.0rc1, we can conclude that your requirements are
+      unsatisfiable.
+Checking if Streamlit is installed
+Installing rich for an improved exception logging
+Using uv pip install.
+Using Python 3.14.5 environment at /home/adminuser/venv
+Resolved 4 packages in 41ms
+Prepared 1 package in 42ms
+Installed 4 packages in 23ms
+ + markdown-it-py==4.2.0
+ + [2026-05-27 00:36:49.818357] mdurl==0.1.2
+ + pygments==2.20.0
+ + rich==15.0.0
+
+────────────────────────────────────────────────────────────────────────────────────────
+
+
+──────────────────────────────────────── pip ───────────────────────────────────────────
+
+Using standard pip install.
+Collecting pandas==2.2.2 (from -r /mount/src/streamlit-obsesity/requirements.txt (line 1))
+  Downloading pandas-2.2.2.tar.gz (4.4 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.4/4.4 MB 94.0 MB/s eta 0:00:00[2026-05-27 00:36:51.418160] 
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Installing backend dependencies: started
+  Installing backend dependencies: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+[00:47:32] 🚀 Starting up repository: 'streamlit-obsesity', branch: 'main', main module: 'app_streamlit.py'
+[00:47:32] 🐙 Cloning repository...
+[00:47:33] 🐙 Cloning into '/mount/src/streamlit-obsesity'...
+
+[00:47:33] 🐙 Cloned repository!
+[00:47:33] 🐙 Pulling code changes from Github...
+[00:47:34] 📦 Processing dependencies...
+
+──────────────────────────────────────── uv ───────────────────────────────────────────
+
+Using uv pip install.
+Using Python 3.14.5 environment at /home/adminuser/venv
+Resolved 54 packages in 533ms
+  × Failed to download and build `scikit-learn==1.4.2`
+  ├─▶ Failed to resolve requirements from `build-system.requires`
+  ├─▶ No solution found when resolving: `setuptools`, `wheel`,
+  │   `cython>=3.0.8`, `numpy==2.0.0rc1`, `scipy>=1.6.0`
+  ╰─▶ Because there is no version of numpy==2.0.0rc1 and you require
+      numpy==2.0.0rc1, we can conclude that your requirements are
+      unsatisfiable.
+Checking if Streamlit is installed
+Installing rich for an improved exception logging
+Using uv pip install.
+Using Python 3.14.5 environment at /home/adminuser/venv
+Resolved 4 packages in 36ms
+Prepared 1 package in 33ms
+Installed 4 packages in 21ms
+ + markdown-it-py==4.2.0
+ + mdurl==0.1.2
+ + pygments==2.20.0
+ + rich==15.0.0
+
+────────────────────────────────────────────────────────────────────────────────────────
+
+
+──────────────────────────────────────── pip ───────────────────────────────────────────
+
+Using standard pip install.
+Collecting pandas==2.2.2 (from -r /mount/src/streamlit-obsesity/requirements.txt (line 1))
+  Downloading pandas-2.2.2.tar.gz (4.4 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.4/4.4 MB 85.5 MB/s eta 0:00:00[2026-05-27 00:47:40.295624] 
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Installing backend dependencies: started
+  Installing backend dependencies: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
