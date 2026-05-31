@@ -998,31 +998,39 @@ with tab_geral:
         n_total = len(df)
         def pct(c): return (dist.get(c, 0) / n_total * 100) if n_total else 0
 
-        p_normal    = pct("Peso Normal")
-        p_sobr_i    = pct("Sobrepeso I")
-        p_sobr_ii   = pct("Sobrepeso II")
-        p_obesidade = pct("Obesidade I") + pct("Obesidade II") + pct("Obesidade III")
-
-        funil_data = [
-            ("#10B981", "Peso Normal", "Saudável",           p_normal,    p_normal),
-            ("#FBBF24", "Sobrepeso I", "Pré-obesidade",      p_sobr_i,    p_normal + p_sobr_i),
-            ("#F97316", "Sobrepeso II", "Início do risco",   p_sobr_ii,   p_normal + p_sobr_i + p_sobr_ii),
-            ("#EF4444", "Obesidade",   "Alto risco clínico", p_obesidade, 100.0),
+        # ordem clínica: do menos grave ao mais grave
+        FUNIL_CLASSES = [
+            ("#06B6D4", "Abaixo do Peso",  "Risco nutricional"),
+            ("#10B981", "Peso Normal",     "Saudável"),
+            ("#FBBF24", "Sobrepeso I",     "Pré-obesidade"),
+            ("#F97316", "Sobrepeso II",    "Início do risco"),
+            ("#EF4444", "Obesidade I",     "Risco clínico"),
+            ("#DC2626", "Obesidade II",    "Risco elevado"),
+            ("#991B1B", "Obesidade III",   "Risco crítico"),
         ]
-        cols = st.columns(4)
+
+        # calcular etapa e acumulado para cada classe
+        funil_data = []
+        acum = 0.0
+        for glow, classe, sub in FUNIL_CLASSES:
+            etapa_pct = pct(classe)
+            acum += etapa_pct
+            funil_data.append((glow, classe, sub, etapa_pct, acum))
+
+        cols = st.columns(7)
         for col, (glow, etapa, sub, etapa_pct, acum_pct) in zip(cols, funil_data):
             with col:
                 st.markdown(f"""
                 <div class="funnel-card" style="--glow:{glow};">
-                    <div class="funnel-title"><b>{etapa}</b> · {sub}</div>
-                    <div class="funnel-stats">
+                    <div class="funnel-title"><b>{etapa}</b><br><span style="font-size:0.65rem;">{sub}</span></div>
+                    <div class="funnel-stats" style="gap:0.6rem;">
                         <div class="funnel-stat">
                             <span class="funnel-stat-label">Etapa</span>
-                            <span class="funnel-stat-value">{etapa_pct:.1f}%</span>
+                            <span class="funnel-stat-value" style="font-size:1.1rem;">{etapa_pct:.1f}%</span>
                         </div>
                         <div class="funnel-stat">
-                            <span class="funnel-stat-label">Acumulado</span>
-                            <span class="funnel-stat-value" style="color:{C['text_2']};">{acum_pct:.1f}%</span>
+                            <span class="funnel-stat-label">Acum.</span>
+                            <span class="funnel-stat-value" style="color:{C['text_2']}; font-size:1.1rem;">{acum_pct:.1f}%</span>
                         </div>
                     </div>
                 </div>
@@ -1030,8 +1038,9 @@ with tab_geral:
 
         st.markdown(
             f"<div class='chart-caption'>"
-            f"<b>Como ler:</b> <b>Etapa</b> = % de pacientes naquela classe. "
-            f"<b>Acumulado</b> = % de pacientes até aquela classe (somatório). "
+            f"<b>Como ler:</b> <b>Etapa</b> = % de pacientes naquela classe específica. "
+            f"<b>Acumulado</b> = % somando essa classe e todas as anteriores na ordem clínica "
+            f"(de Abaixo do Peso → Obesidade III). O último card sempre fecha em 100%. "
             f"Filtros ativos: {total} pacientes da amostra.</div>",
             unsafe_allow_html=True,
         )
