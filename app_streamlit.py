@@ -2389,24 +2389,45 @@ with tab_modelo:
         unsafe_allow_html=True,
     )
 
+    # mapa centralizado: nome técnico → nome de negócio
+    NOME_BUSINESS = {
+        "BMI":            "IMC (BMI)",
+        "Gender":         "Gênero (Gender)",
+        "Age":            "Idade (Age)",
+        "Height":         "Altura (Height)",
+        "Weight":         "Peso (Weight)",
+        "family_history": "Histórico Familiar (family_history)",
+        "FAVC":           "Consumo Calórico Frequente (FAVC)",
+        "FCVC":           "Vegetais nas Refeições (FCVC)",
+        "NCP":            "Refeições Principais/dia (NCP)",
+        "CAEC":           "Lanches Entre Refeições (CAEC)",
+        "SMOKE":          "Fumante (SMOKE)",
+        "CH2O":           "Consumo de Água (CH2O)",
+        "SCC":            "Monitora Calorias (SCC)",
+        "FAF":            "Atividade Física Semanal (FAF)",
+        "TUE":            "Tempo em Eletrônicos (TUE)",
+        "CALC":           "Consumo de Álcool (CALC)",
+        "MTRANS":         "Meio de Transporte (MTRANS)",
+    }
+
     variaveis_df = pd.DataFrame([
-        ("BMI",            "Índice de Massa Corporal (Peso ÷ Altura²) — derivado",     "Numérica"),
-        ("Gender",         "Gênero biológico (Female / Male)",                          "Binária"),
-        ("Age",            "Idade do paciente em anos",                                 "Numérica"),
-        ("Height",         "Altura em metros",                                          "Numérica"),
-        ("Weight",         "Peso em quilogramas",                                       "Numérica"),
-        ("family_history", "Histórico familiar de sobrepeso (sim/não)",                 "Binária"),
-        ("FAVC",           "Consome alimentos calóricos com frequência (sim/não)",      "Binária"),
-        ("FCVC",           "Frequência de vegetais nas refeições (1-3)",                "Ordinal"),
-        ("NCP",            "Número de refeições principais por dia (1-4)",              "Numérica"),
-        ("CAEC",           "Lanches entre refeições (Nunca / Às vezes / Freq / Sempre)", "Ordinal"),
-        ("SMOKE",          "Fumante (sim/não)",                                         "Binária"),
-        ("CH2O",           "Consumo de água diário (1-3 → <1L, 1-2L, >2L)",             "Ordinal"),
-        ("SCC",            "Monitora consumo de calorias (sim/não)",                    "Binária"),
-        ("FAF",            "Atividade física semanal (0-3 → sedentário a atleta)",      "Ordinal"),
-        ("TUE",            "Tempo de uso de eletrônicos (0-2 → 0-2h, 3-5h, >5h)",       "Ordinal"),
-        ("CALC",           "Consumo de álcool (Não / Social / Freq / Diário)",          "Ordinal"),
-        ("MTRANS",         "Meio de transporte habitual (5 categorias)",                "Nominal"),
+        (NOME_BUSINESS["BMI"],            "Índice de Massa Corporal (Peso ÷ Altura²) — derivado",     "Numérica"),
+        (NOME_BUSINESS["Gender"],         "Gênero biológico (Female / Male)",                          "Binária"),
+        (NOME_BUSINESS["Age"],            "Idade do paciente em anos",                                 "Numérica"),
+        (NOME_BUSINESS["Height"],         "Altura em metros",                                          "Numérica"),
+        (NOME_BUSINESS["Weight"],         "Peso em quilogramas",                                       "Numérica"),
+        (NOME_BUSINESS["family_history"], "Histórico familiar de sobrepeso (sim/não)",                 "Binária"),
+        (NOME_BUSINESS["FAVC"],           "Consome alimentos calóricos com frequência (sim/não)",      "Binária"),
+        (NOME_BUSINESS["FCVC"],           "Frequência de vegetais nas refeições (1-3)",                "Ordinal"),
+        (NOME_BUSINESS["NCP"],            "Número de refeições principais por dia (1-4)",              "Numérica"),
+        (NOME_BUSINESS["CAEC"],           "Lanches entre refeições (Nunca / Às vezes / Freq / Sempre)", "Ordinal"),
+        (NOME_BUSINESS["SMOKE"],          "Fumante (sim/não)",                                         "Binária"),
+        (NOME_BUSINESS["CH2O"],           "Consumo de água diário (1-3 → <1L, 1-2L, >2L)",             "Ordinal"),
+        (NOME_BUSINESS["SCC"],            "Monitora consumo de calorias (sim/não)",                    "Binária"),
+        (NOME_BUSINESS["FAF"],            "Atividade física semanal (0-3 → sedentário a atleta)",      "Ordinal"),
+        (NOME_BUSINESS["TUE"],            "Tempo de uso de eletrônicos (0-2 → 0-2h, 3-5h, >5h)",       "Ordinal"),
+        (NOME_BUSINESS["CALC"],           "Consumo de álcool (Não / Social / Freq / Diário)",          "Ordinal"),
+        (NOME_BUSINESS["MTRANS"],         "Meio de transporte habitual (5 categorias)",                "Nominal"),
     ], columns=["Variável", "Descrição clínica", "Tipo"])
     st.dataframe(variaveis_df, use_container_width=True, hide_index=True)
 
@@ -2421,11 +2442,12 @@ with tab_modelo:
 
     fi = pd.DataFrame(meta["feature_importance"])
     fi["importance_pct"] = (fi["importance"] * 100).round(2)
+    fi["feature_label"] = fi["feature"].map(NOME_BUSINESS).fillna(fi["feature"])
     fig_fi = px.bar(
         fi.sort_values("importance"),
-        x="importance_pct", y="feature", orientation="h",
+        x="importance_pct", y="feature_label", orientation="h",
         color="importance_pct", color_continuous_scale=[C['surface_2'], C['cyan']],
-        labels={"importance_pct": "Importância (%)", "feature": "Variável"},
+        labels={"importance_pct": "Importância (%)", "feature_label": "Variável"},
         text="importance_pct",
     )
     fig_fi.update_traces(texttemplate="%{text:.2f}%", textposition="outside",
@@ -2441,7 +2463,7 @@ with tab_modelo:
     st.plotly_chart(fig_fi, use_container_width=True)
     st.markdown(
         f"<div class='chart-caption'><b>Como ler:</b> quanto maior a barra, mais a variável pesa nas decisões "
-        f"do modelo. <b>BMI</b> é dominante (combina peso e altura). "
+        f"do modelo. <b>IMC (BMI)</b> é dominante (combina peso e altura). "
         f"Variáveis comportamentais ajustam a classe final em pacientes-limítrofes.</div>",
         unsafe_allow_html=True,
     )
