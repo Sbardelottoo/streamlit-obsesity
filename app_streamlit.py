@@ -1347,18 +1347,16 @@ with tab_clinica:
             cpf_input = st.text_input(
                 "CPF · chave do banco de pacientes",
                 value="",
-                placeholder="000.000.000-00",
+                placeholder="00000000000",
                 key="paciente_cpf",
-                max_chars=14,
-                help="Use o CPF como chave única. Será usado para acompanhar a evolução na aba Histórico.",
+                max_chars=11,
+                help="Apenas números. Será usado como chave única para acompanhar a evolução na aba Histórico.",
             )
-            # aplicar máscara visual em tempo real
-            cpf_visual = formatar_cpf_visual(cpf_input)
-            if cpf_visual != cpf_input and cpf_input:
-                st.session_state["paciente_cpf"] = cpf_visual
-                st.rerun()
-
+            # normaliza para apenas dígitos (remove qualquer caractere não-numérico)
             cpf_limpo = limpar_cpf(cpf_input)
+            if cpf_limpo != cpf_input and cpf_input:
+                st.session_state["paciente_cpf"] = cpf_limpo
+                st.rerun()
             if cpf_limpo and len(cpf_limpo) == 11:
                 if validar_cpf(cpf_limpo):
                     # checa se já existe no banco
@@ -1723,6 +1721,38 @@ with tab_clinica:
             </div>
             """, unsafe_allow_html=True)
 
+        # ── PROBABILIDADES (antes do plano para mostrar diagnóstico do modelo) ─
+        st.markdown('<div class="section-title">Distribuição de Probabilidades</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            "<div class='ml-explain'><b>O que é probabilidade da classe?</b> "
+            "O modelo atribui um % para cada uma das 7 categorias. A classe predita é a de maior valor. "
+            "Probabilidades próximas indicam pacientes em transição.</div>",
+            unsafe_allow_html=True,
+        )
+        values = [probs.get(c, 0) for c in TARGET_LABELS_PT]
+        colors = [CLASS_COLORS[c] for c in TARGET_LABELS_PT]
+
+        fig_p = go.Figure(go.Bar(
+            x=TARGET_LABELS_PT, y=values,
+            marker_color=colors, marker_line_color=C['surface'], marker_line_width=2,
+            text=[f"{v:.1f}%" for v in values], textposition="outside",
+            textfont=dict(color=C['text'], size=11),
+        ))
+        fig_p.update_layout(
+            plot_bgcolor=C['surface'], paper_bgcolor=C['surface'],
+            font=dict(family="Inter", color=C['text']),
+            yaxis=dict(range=[0, max(values)*1.25], gridcolor=C['border'], color=C['text_2'], title="Probabilidade (%)"),
+            xaxis=dict(color=C['text_2'], tickangle=-25),
+            height=400, margin=dict(t=20, b=10),
+        )
+        st.plotly_chart(fig_p, use_container_width=True)
+        st.markdown(
+            "<div class='chart-caption'><b>Como ler:</b> cada barra é a chance de o paciente pertencer àquela classe. "
+            "A barra mais alta é o diagnóstico final.</div>",
+            unsafe_allow_html=True,
+        )
+
         # ── PLANO CLÍNICO PERSONALIZADO ───────────────────────────
         plano = dp.get("plano", {})
         st.markdown('<div class="section-title">Plano Clínico Personalizado — Dieta &amp; Exercício</div>',
@@ -1837,38 +1867,6 @@ with tab_clinica:
                     <p>{alertas_html}</p>
                 </div>
                 """, unsafe_allow_html=True)
-
-        # ── PROBABILIDADES + PROJEÇÃO DE MELHORA ──────────────────
-        st.markdown('<div class="section-title">Distribuição de Probabilidades</div>',
-                    unsafe_allow_html=True)
-        st.markdown(
-            "<div class='ml-explain'><b>O que é probabilidade da classe?</b> "
-            "O modelo atribui um % para cada uma das 7 categorias. A classe predita é a de maior valor. "
-            "Probabilidades próximas indicam pacientes em transição.</div>",
-            unsafe_allow_html=True,
-        )
-        values = [probs.get(c, 0) for c in TARGET_LABELS_PT]
-        colors = [CLASS_COLORS[c] for c in TARGET_LABELS_PT]
-
-        fig_p = go.Figure(go.Bar(
-            x=TARGET_LABELS_PT, y=values,
-            marker_color=colors, marker_line_color=C['surface'], marker_line_width=2,
-            text=[f"{v:.1f}%" for v in values], textposition="outside",
-            textfont=dict(color=C['text'], size=11),
-        ))
-        fig_p.update_layout(
-            plot_bgcolor=C['surface'], paper_bgcolor=C['surface'],
-            font=dict(family="Inter", color=C['text']),
-            yaxis=dict(range=[0, max(values)*1.25], gridcolor=C['border'], color=C['text_2'], title="Probabilidade (%)"),
-            xaxis=dict(color=C['text_2'], tickangle=-25),
-            height=400, margin=dict(t=20, b=10),
-        )
-        st.plotly_chart(fig_p, use_container_width=True)
-        st.markdown(
-            "<div class='chart-caption'><b>Como ler:</b> cada barra é a chance de o paciente pertencer àquela classe. "
-            "A barra mais alta é o diagnóstico final.</div>",
-            unsafe_allow_html=True,
-        )
 
         # ── Projeção de melhora (após o plano) ────────────────────
         st.markdown('<div class="section-title">Projeção de Melhora com o Plano</div>',
@@ -2011,7 +2009,7 @@ with tab_hist:
     else:
         # ── Filtro por CPF ─────────────────────────────────────────
         st.markdown('<div class="section-title">Filtrar por CPF</div>', unsafe_allow_html=True)
-        cpfs_opts = ["— Todos —"] + [formatar_cpf_visual(c) for c in sorted(db_pacientes.keys())]
+        cpfs_opts = ["— Todos —"] + [str(c) for c in sorted(db_pacientes.keys())]
         cpf_filtro = st.selectbox(
             "Selecione o paciente",
             cpfs_opts,
@@ -2024,7 +2022,7 @@ with tab_hist:
         for cpf, lista in db_pacientes.items():
             for r in lista:
                 registros.append({
-                    "CPF": formatar_cpf_visual(cpf),
+                    "CPF": str(cpf),
                     "Data": pd.to_datetime(r.get("timestamp")),
                     "Nome": r.get("nome") or "—",
                     "Gênero": "M" if r.get("Gender") == "Male" else "F",
@@ -2155,46 +2153,97 @@ with tab_hist:
                 unsafe_allow_html=True,
             )
 
-            # 3) Evolução dos hábitos (radar 1ª vs última)
+            # 3) Evolução dos hábitos — 2 gráficos de barras lado a lado (1ª vs Última)
             primeiro = df_h.iloc[0]
             ultimo = df_h.iloc[-1]
-            cat = ["Água (L)", "Exercício (dias/sem)", "Refeições/dia",
-                   "Tela (h/dia)", "Idade"]
-            v1 = [primeiro["Água (L)"] or 0, primeiro["Exercício (dias/sem)"] or 0,
-                  primeiro["Refeições/dia"] or 0, primeiro["Tela (h/dia)"] or 0,
-                  primeiro["Idade"] or 0]
-            v2 = [ultimo["Água (L)"] or 0, ultimo["Exercício (dias/sem)"] or 0,
-                  ultimo["Refeições/dia"] or 0, ultimo["Tela (h/dia)"] or 0,
-                  ultimo["Idade"] or 0]
+            data_1 = primeiro["Data"].strftime("%d/%m/%Y")
+            data_n = ultimo["Data"].strftime("%d/%m/%Y")
 
-            fig_hab = go.Figure()
-            fig_hab.add_trace(go.Scatterpolar(
-                r=v1 + [v1[0]], theta=cat + [cat[0]],
-                fill="toself", name=f"1ª avaliação ({primeiro['Data'].strftime('%d/%m/%Y')})",
-                line_color=C["orange"], fillcolor="rgba(249,115,22,0.25)",
+            # GRUPO A — hábitos numéricos (água, exercício, refeições, tela)
+            cat_a = ["💧 Água (L)", "🏃 Exercício (dias/sem)",
+                     "🍽️ Refeições/dia", "📱 Tela (h/dia)"]
+            v1_a = [primeiro["Água (L)"] or 0, primeiro["Exercício (dias/sem)"] or 0,
+                    primeiro["Refeições/dia"] or 0, primeiro["Tela (h/dia)"] or 0]
+            v2_a = [ultimo["Água (L)"] or 0, ultimo["Exercício (dias/sem)"] or 0,
+                    ultimo["Refeições/dia"] or 0, ultimo["Tela (h/dia)"] or 0]
+
+            fig_hab_a = go.Figure()
+            fig_hab_a.add_trace(go.Bar(
+                name=f"1ª avaliação ({data_1})",
+                x=cat_a, y=v1_a,
+                marker_color=C["orange"], marker_line_color=C["surface"], marker_line_width=2,
+                text=[f"{v:.1f}" for v in v1_a], textposition="outside",
+                textfont=dict(color=C["text"], size=11),
             ))
-            fig_hab.add_trace(go.Scatterpolar(
-                r=v2 + [v2[0]], theta=cat + [cat[0]],
-                fill="toself", name=f"Última ({ultimo['Data'].strftime('%d/%m/%Y')})",
-                line_color=C["cyan"], fillcolor="rgba(6,182,212,0.25)",
+            fig_hab_a.add_trace(go.Bar(
+                name=f"Última ({data_n})",
+                x=cat_a, y=v2_a,
+                marker_color=C["cyan"], marker_line_color=C["surface"], marker_line_width=2,
+                text=[f"{v:.1f}" for v in v2_a], textposition="outside",
+                textfont=dict(color=C["text"], size=11),
             ))
-            fig_hab.update_layout(
-                title=dict(text="🏃 Hábitos: 1ª avaliação vs Última", font=dict(color=C["text"])),
-                polar=dict(
-                    bgcolor=C["surface"],
-                    radialaxis=dict(visible=True, color=C["text_2"], gridcolor=C["border"]),
-                    angularaxis=dict(color=C["text"], gridcolor=C["border"]),
-                ),
-                paper_bgcolor=C["surface"],
+            max_a = max(v1_a + v2_a + [1])
+            fig_hab_a.update_layout(
+                title=dict(text="🏃 Hábitos Diários — 1ª vs Última Avaliação",
+                           font=dict(color=C["text"])),
+                barmode="group",
+                plot_bgcolor=C["surface"], paper_bgcolor=C["surface"],
                 font=dict(family="Inter", color=C["text"]),
-                height=400, margin=dict(t=60, b=30),
-                legend=dict(orientation="h", y=-0.1),
+                xaxis=dict(color=C["text_2"]),
+                yaxis=dict(gridcolor=C["border"], color=C["text_2"],
+                           range=[0, max_a * 1.25], title="Valor"),
+                height=380, margin=dict(t=60, b=30),
+                legend=dict(orientation="h", y=1.15),
             )
-            st.plotly_chart(fig_hab, use_container_width=True)
+            st.plotly_chart(fig_hab_a, use_container_width=True)
+
+            # GRUPO B — fatores de risco binários (sim/não)
+            cat_b = ["🧬 Hist. Familiar", "🍔 Calóricos (FAVC)", "🚬 Fuma"]
+            v1_b = [
+                100 if primeiro["Hist. Familiar"] == "Sim" else 0,
+                100 if primeiro["Calóricos (FAVC)"] == "Sim" else 0,
+                100 if primeiro["Fuma"] == "Sim" else 0,
+            ]
+            v2_b = [
+                100 if ultimo["Hist. Familiar"] == "Sim" else 0,
+                100 if ultimo["Calóricos (FAVC)"] == "Sim" else 0,
+                100 if ultimo["Fuma"] == "Sim" else 0,
+            ]
+
+            fig_hab_b = go.Figure()
+            fig_hab_b.add_trace(go.Bar(
+                name=f"1ª avaliação ({data_1})",
+                x=cat_b, y=v1_b,
+                marker_color=C["orange"], marker_line_color=C["surface"], marker_line_width=2,
+                text=[("Sim" if v > 0 else "Não") for v in v1_b], textposition="outside",
+                textfont=dict(color=C["text"], size=11),
+            ))
+            fig_hab_b.add_trace(go.Bar(
+                name=f"Última ({data_n})",
+                x=cat_b, y=v2_b,
+                marker_color=C["cyan"], marker_line_color=C["surface"], marker_line_width=2,
+                text=[("Sim" if v > 0 else "Não") for v in v2_b], textposition="outside",
+                textfont=dict(color=C["text"], size=11),
+            ))
+            fig_hab_b.update_layout(
+                title=dict(text="🩺 Fatores de Risco — Presença Sim/Não",
+                           font=dict(color=C["text"])),
+                barmode="group",
+                plot_bgcolor=C["surface"], paper_bgcolor=C["surface"],
+                font=dict(family="Inter", color=C["text"]),
+                xaxis=dict(color=C["text_2"]),
+                yaxis=dict(gridcolor=C["border"], color=C["text_2"],
+                           range=[0, 120], title="Presente (%)"),
+                height=320, margin=dict(t=60, b=30),
+                legend=dict(orientation="h", y=1.18),
+            )
+            st.plotly_chart(fig_hab_b, use_container_width=True)
+
             st.markdown(
-                "<div class='chart-caption'><b>Como ler:</b> radar comparando os hábitos do paciente entre a 1ª e a última "
-                "avaliação. Quanto maior a área, mais intensa a presença daquele hábito. "
-                "Ideal: aumentar Água/Exercício e reduzir Tela.</div>",
+                f"<div class='chart-caption'><b>Como ler:</b> barras lado a lado comparando "
+                f"a <b>1ª avaliação</b> (laranja, {data_1}) com a <b>última</b> (azul, {data_n}). "
+                f"<b>Ideal:</b> aumentar Água e Exercício, reduzir Tela e fatores de risco modificáveis "
+                f"(FAVC, fumo). Histórico familiar é fixo — serve como contexto.</div>",
                 unsafe_allow_html=True,
             )
 
