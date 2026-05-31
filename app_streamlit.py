@@ -20,6 +20,17 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from pipeline_ml import FEATURES, TARGET_LABELS_PT, TARGET_ORDER, predict_single
+from clinical_helpers import (
+    carregar_pacientes,
+    formatar_cpf_visual,
+    gerar_plano_clinico,
+    historico_paciente,
+    limpar_cpf,
+    peso_meta_saudavel,
+    salvar_paciente,
+    score_progressao,
+    validar_cpf,
+)
 
 # ============================================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -574,7 +585,7 @@ st.markdown(f"""
 <div class="top-header">
   <div>
     <h1>🏥 <span>ObesityIQ</span> · Dashboard Clínico Epidemiológico</h1>
-    <div class="meta">POS TECH Data Analytics · Tech Challenge Fase 04 · Atualizado às {now.strftime('%H:%M')}</div>
+    <div class="meta">Plataforma inteligente de monitoramento e prevenção da obesidade · Atualizado às {now.strftime('%H:%M')}</div>
   </div>
   <div style="text-align:right; color:{C['muted']}; font-size:0.8rem;">
     <div style="color:{C['cyan']}; font-weight:600; font-size:0.92rem;">XGBoost · {meta['model_accuracy']*100:.1f}% acurácia</div>
@@ -773,16 +784,122 @@ def gerar_pdf_dashboard(df_filtrado, filtros, meta, ultima_pred=None, dados_pac=
     return buf.getvalue()
 
 
+def gerar_pdf_historico(df_h, cpf_filtro):
+    """Gera PDF com o histórico de acompanhamento do paciente filtrado (ou geral)."""
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors as rl
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                     Table, TableStyle)
+    from reportlab.lib.enums import TA_LEFT
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=1.2*cm, rightMargin=1.2*cm,
+                            topMargin=1.2*cm, bottomMargin=1.2*cm)
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("Title", parent=styles["Heading1"],
+                           fontSize=18, textColor=rl.HexColor("#1E40AF"),
+                           spaceAfter=4, alignment=TA_LEFT)
+    subt = ParagraphStyle("Sub", parent=styles["Normal"],
+                          fontSize=10, textColor=rl.HexColor("#64748B"),
+                          spaceAfter=12)
+    h2 = ParagraphStyle("H2", parent=styles["Heading2"],
+                        fontSize=12, textColor=rl.HexColor("#1E40AF"),
+                        spaceBefore=10, spaceAfter=6)
+    body = ParagraphStyle("Body", parent=styles["Normal"],
+                          fontSize=9, textColor=rl.HexColor("#0F172A"),
+                          leading=12)
+
+    el = []
+    titulo_txt = (f"Acompanhamento — Paciente {cpf_filtro}"
+                  if cpf_filtro != "— Todos —" else "Banco de Acompanhamento — Todos os Pacientes")
+    el.append(Paragraph(f"🏥 ObesityIQ — {titulo_txt}", title))
+    el.append(Paragraph(
+        f"Relatório de evolução clínica · Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}",
+        subt))
+
+    # ── Resumo do acompanhamento ─────────────────────────────────
+    if len(df_h) > 0:
+        el.append(Paragraph("Resumo do Acompanhamento", h2))
+        if cpf_filtro != "— Todos —" and len(df_h) >= 2:
+            delta_peso = df_h["Peso (kg)"].iloc[-1] - df_h["Peso (kg)"].iloc[0]
+            delta_imc = df_h["IMC"].iloc[-1] - df_h["IMC"].iloc[0]
+            dias = (df_h["Data"].iloc[-1] - df_h["Data"].iloc[0]).days
+            resumo = [
+                ["Métrica", "Valor"],
+                ["Período de acompanhamento", f"{dias} dia(s)"],
+                ["Avaliações realizadas",     str(len(df_h))],
+                ["Peso inicial / atual",      f"{df_h['Peso (kg)'].iloc[0]:.1f} kg → {df_h['Peso (kg)'].iloc[-1]:.1f} kg"],
+                ["Variação de peso",          f"{delta_peso:+.1f} kg"],
+                ["IMC inicial / atual",       f"{df_h['IMC'].iloc[0]:.1f} → {df_h['IMC'].iloc[-1]:.1f}"],
+                ["Variação de IMC",           f"{delta_imc:+.1f} kg/m²"],
+                ["Diagnóstico mais recente",  df_h["Diagnóstico"].iloc[-1]],
+            ]
+            t_resumo = Table(resumo, colWidths=[6*cm, 12*cm])
+            t_resumo.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (-1,0), rl.HexColor("#1E40AF")),
+                ("TEXTCOLOR",  (0,0), (-1,0), rl.white),
+                ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
+                ("FONTSIZE",   (0,0), (-1,-1), 9),
+                ("ROWBACKGROUNDS", (0,1), (-1,-1), [rl.HexColor("#F8FAFC"), rl.white]),
+                ("GRID",       (0,0), (-1,-1), 0.3, rl.HexColor("#CBD5E1")),
+                ("PADDING",    (0,0), (-1,-1), 5),
+            ]))
+            el.append(t_resumo)
+        else:
+            el.append(Paragraph(
+                f"Total de registros: <b>{len(df_h)}</b>. "
+                f"Filtre por CPF na aba Histórico para visualizar a evolução individual com gráficos.",
+                body))
+
+    # ── Tabela com as avaliações ─────────────────────────────────
+    el.append(Paragraph("Detalhamento das Avaliações", h2))
+    cols_pdf = ["Data", "CPF", "Nome", "Idade", "Peso (kg)", "IMC",
+                "Diagnóstico", "Confiança", "Água (L)", "Exercício (dias/sem)"]
+    cols_disp = [c for c in cols_pdf if c in df_h.columns]
+    df_pdf = df_h[cols_disp].copy()
+    if "Data" in df_pdf.columns:
+        df_pdf["Data"] = df_pdf["Data"].dt.strftime("%d/%m/%Y")
+
+    data_pdf = [cols_disp] + df_pdf.astype(str).values.tolist()
+    if len(data_pdf) > 1:
+        t = Table(data_pdf, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), rl.HexColor("#1E40AF")),
+            ("TEXTCOLOR",  (0,0), (-1,0), rl.white),
+            ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",   (0,0), (-1,-1), 8),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [rl.HexColor("#F8FAFC"), rl.white]),
+            ("GRID",       (0,0), (-1,-1), 0.3, rl.HexColor("#CBD5E1")),
+            ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
+            ("PADDING",    (0,0), (-1,-1), 3),
+        ]))
+        el.append(t)
+    else:
+        el.append(Paragraph("<i>Nenhuma avaliação a exibir.</i>", body))
+
+    el.append(Spacer(1, 0.4*cm))
+    el.append(Paragraph(
+        "<i>Documento gerado pelo ObesityIQ — ferramenta de apoio clínico. "
+        "Não substitui avaliação médica presencial.</i>",
+        body))
+
+    doc.build(el)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 # ============================================================================
 # ABAS PRINCIPAIS
 # ============================================================================
 
-tab_geral, tab_clinica, tab_insights, tab_hist, tab_sobre = st.tabs([
+tab_geral, tab_clinica, tab_hist, tab_modelo = st.tabs([
     "📊 Visão Geral",
     "🩺 Análise Clínica",
-    "🧠 Insights do Modelo",
     "📋 Histórico",
-    "ℹ️ Sobre",
+    "🧠 Modelo & Sobre",
 ])
 
 
@@ -1098,6 +1215,116 @@ with tab_geral:
             unsafe_allow_html=True,
         )
 
+        # ── ANÁLISE PROJETIVA DE PROGRESSÃO ────────────────────────
+        st.markdown('<div class="section-title">Análise Projetiva — Tendência de Progressão</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            "<div class='ml-explain'><b>O que mostra?</b> Estimativa heurística da chance de o grupo filtrado "
+            "<b>desenvolver ou agravar a obesidade nos próximos 5 anos sem acompanhamento médico</b>. "
+            "<b>Como é calculado:</b> taxa-base anual de progressão de 3% multiplicada pelos fatores de risco "
+            "prevalentes no grupo (histórico familiar ×2,0, sedentarismo ×1,5, calóricos ×1,4, "
+            "lanches frequentes ×1,3, alto tempo de tela ×1,2). <b>Não é predição do modelo XGBoost</b> — "
+            "é uma projeção epidemiológica de apoio.</div>",
+            unsafe_allow_html=True,
+        )
+
+        prog = score_progressao(df)
+
+        # Layout: card principal + lista de fatores
+        col_p1, col_p2 = st.columns([1, 1.3])
+
+        with col_p1:
+            # Gauge de progressão
+            fig_prog = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=prog["prog_5a"],
+                number={"suffix": "%", "font": {"size": 36, "color": prog["cor_risco"]}},
+                title={"text": "Risco de progressão em 5 anos",
+                       "font": {"size": 13, "color": C['text_2']}},
+                gauge={
+                    "axis": {"range": [0, 100], "tickfont": {"color": C['text_2']}},
+                    "bar":  {"color": prog["cor_risco"], "thickness": 0.30},
+                    "bgcolor": C['surface'],
+                    "borderwidth": 0,
+                    "steps": [
+                        {"range": [0,  15],  "color": "rgba(16,185,129,0.25)"},
+                        {"range": [15, 35],  "color": "rgba(251,191,36,0.25)"},
+                        {"range": [35, 60],  "color": "rgba(249,115,22,0.25)"},
+                        {"range": [60, 100], "color": "rgba(239,68,68,0.25)"},
+                    ],
+                    "threshold": {"line": {"color": prog["cor_risco"], "width": 4},
+                                  "thickness": 0.85, "value": prog["prog_5a"]},
+                },
+            ))
+            fig_prog.update_layout(height=280, paper_bgcolor=C['surface'],
+                                   font=dict(family="Inter", color=C['text']),
+                                   margin=dict(t=40, b=10, l=30, r=30))
+            st.plotly_chart(fig_prog, use_container_width=True)
+            st.markdown(
+                f"<div class='chart-caption'><b>Como ler:</b> verde 0-15% (baixo), amarelo 15-35% (moderado), "
+                f"laranja 35-60% (alto), vermelho >60% (muito alto). "
+                f"<b>Score multiplicador:</b> {prog['score']}× sobre a taxa-base.</div>",
+                unsafe_allow_html=True,
+            )
+
+        with col_p2:
+            cor = prog["cor_risco"]
+            classe_dom = prog["classe_dominante"]
+            prox = prog["proxima_classe"]
+            transicao_html = (f"<b>{classe_dom}</b> → <b style='color:{cor};'>{prox}</b>"
+                              if classe_dom != prox else f"<b>{classe_dom}</b> (já no topo)")
+
+            st.markdown(f"""
+            <div class="info-card" style="--glow:{cor};">
+                <h4>📈 Projeção sem intervenção</h4>
+                <p>
+                    <b>Nível de risco:</b> <span style='color:{cor}; font-weight:600;'>{prog['nivel']}</span><br>
+                    <b>Classe dominante atual:</b> {classe_dom}<br>
+                    <b>Trajetória esperada em 5 anos:</b> {transicao_html}<br>
+                    <b>Pacientes na amostra:</b> {prog['n']:,}
+                </p>
+            </div>
+            """.replace(",", "."), unsafe_allow_html=True)
+
+            # Top 3 fatores de risco
+            top3_html = ""
+            for nome, pct, peso in prog["top3"]:
+                bar_w = pct * 100
+                top3_html += (
+                    f"<div class='bd-row'>"
+                    f"<div class='left'><span class='bd-dot' style='background:{cor};'></span>{nome}</div>"
+                    f"<div><span class='bd-value'>{pct*100:.0f}%</span>"
+                    f"<span class='bd-pct'>×{peso}</span></div></div>"
+                    f"<div class='bd-bar'><div class='bd-bar-fill' "
+                    f"style='--bar-color:{cor};width:{bar_w}%;'></div></div>"
+                )
+            st.markdown(f"""
+            <div class="bd-card" style="margin-top:0.6rem;">
+                <div class="bd-title">🎯 Top 3 Fatores de Risco no Grupo</div>
+                <div class="bd-subtitle">% da amostra com o fator presente × multiplicador de risco</div>
+                {top3_html}
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Alerta clínico baseado no nível
+        recomendacoes_grupo = {
+            "Baixo": ("✅ Grupo de baixo risco de progressão", C["green"],
+                "Manter acompanhamento anual de rotina. Reforço educacional em hábitos saudáveis."),
+            "Moderado": ("⚠️ Atenção: grupo com tendência crescente", C["yellow"],
+                "Iniciar intervenção preventiva — orientação nutricional e estímulo à atividade física regular. Reavaliar em 12 meses."),
+            "Alto": ("🔶 Grupo com alto risco — intervenção recomendada", C["orange"],
+                "Encaminhar para acompanhamento multidisciplinar (nutricionista + educador físico). Reavaliar em 6 meses. Considerar campanhas em massa."),
+            "Muito Alto": ("🔴 Grupo crítico — intervenção urgente", C["red"],
+                "Acompanhamento médico contínuo, programa estruturado de emagrecimento e monitoramento de comorbidades (HAS, DM2, dislipidemia). Reavaliar em 3 meses."),
+        }
+        titulo_r, cor_r, texto_r = recomendacoes_grupo[prog["nivel"]]
+        st.markdown(f"""
+        <div class="info-card" style="--glow:{cor_r}; margin-top:0.6rem;">
+            <h4>{titulo_r}</h4>
+            <p>{texto_r}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
 
 # ╔════════════════════════════════════════════════════════════════════╗
 # ║ ABA 2 — ANÁLISE CLÍNICA INDIVIDUAL                                  ║
@@ -1107,20 +1334,68 @@ with tab_clinica:
     # ── FORMULÁRIO DO PACIENTE (escopo desta aba) ──────────────────
     with st.expander("📋 Dados do Paciente — preencha para gerar análise individual", expanded=True):
 
-        # Linha 0 — Identificação
-        col_nome, _ = st.columns([3, 1])
+        # Linha 0 — Identificação (Nome + CPF)
+        col_nome, col_cpf = st.columns([2, 1])
         with col_nome:
             nome_paciente = st.text_input(
-                "Nome / Identificador do Paciente",
+                "Nome do Paciente",
                 value="",
-                placeholder="Ex: Prontuário 1234",
+                placeholder="Ex: Maria Silva",
                 key="paciente_nome",
             )
-            st.markdown(
-                f"<div style='color:{C['muted']}; font-size:0.75rem; margin-top:-0.6rem; margin-bottom:0.4rem;'>"
-                f"🔒 Apenas identificação local nesta sessão. Nada é armazenado em servidor.</div>",
-                unsafe_allow_html=True,
+        with col_cpf:
+            cpf_input = st.text_input(
+                "CPF · chave do banco de pacientes",
+                value="",
+                placeholder="000.000.000-00",
+                key="paciente_cpf",
+                max_chars=14,
+                help="Use o CPF como chave única. Será usado para acompanhar a evolução na aba Histórico.",
             )
+            # aplicar máscara visual em tempo real
+            cpf_visual = formatar_cpf_visual(cpf_input)
+            if cpf_visual != cpf_input and cpf_input:
+                st.session_state["paciente_cpf"] = cpf_visual
+                st.rerun()
+
+            cpf_limpo = limpar_cpf(cpf_input)
+            if cpf_limpo and len(cpf_limpo) == 11:
+                if validar_cpf(cpf_limpo):
+                    # checa se já existe no banco
+                    existing = historico_paciente(cpf_limpo)
+                    if existing:
+                        ult = pd.to_datetime(existing[-1].get("timestamp")).strftime("%d/%m/%Y")
+                        st.markdown(
+                            f"<div style='color:{C['cyan']}; font-size:0.75rem; margin-top:-0.5rem;'>"
+                            f"📌 Paciente já cadastrado · {len(existing)} avaliação(ões) · "
+                            f"última em {ult}</div>",
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            f"<div style='color:{C['green']}; font-size:0.75rem; margin-top:-0.5rem;'>"
+                            f"✅ CPF válido — novo cadastro</div>",
+                            unsafe_allow_html=True,
+                        )
+                else:
+                    st.markdown(
+                        f"<div style='color:{C['red']}; font-size:0.75rem; margin-top:-0.5rem;'>"
+                        f"⚠️ CPF inválido — confira os dígitos</div>",
+                        unsafe_allow_html=True,
+                    )
+            elif cpf_limpo:
+                st.markdown(
+                    f"<div style='color:{C['muted']}; font-size:0.75rem; margin-top:-0.5rem;'>"
+                    f"{len(cpf_limpo)}/11 dígitos</div>",
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown(
+            f"<div style='color:{C['muted']}; font-size:0.75rem; margin-top:0.2rem; margin-bottom:0.4rem;'>"
+            f"🔒 CPF é usado apenas como chave do banco local <code>pacientes.json</code>. "
+            f"Sem CPF válido, a avaliação não é persistida no histórico.</div>",
+            unsafe_allow_html=True,
+        )
 
         # Linha 1 — antropométricos
         col1, col2, col3, col4 = st.columns(4)
@@ -1194,15 +1469,38 @@ with tab_clinica:
                                 format_func=lambda x: {"no":"Não bebo","Sometimes":"Socialmente",
                                                         "Frequently":"Frequentemente","Always":"Diariamente"}[x])
 
-        # Linha 5 — transporte + botão
-        col1, col2 = st.columns([3, 2])
+        # Linha 5 — transporte
+        col1, _ = st.columns([3, 2])
         with col1:
             mtrans = st.selectbox("Meio de transporte habitual",
                                   ["Public_Transportation", "Automobile", "Walking", "Motorbike", "Bike"],
                                   format_func=lambda x: {
                                       "Public_Transportation":"🚌 Transporte Público","Automobile":"🚗 Carro",
                                       "Walking":"🚶 A Pé","Motorbike":"🏍️ Moto","Bike":"🚴 Bicicleta"}[x])
-        with col2:
+
+        # Linha 6 — Meta de emagrecimento (alimenta o plano clínico)
+        st.markdown(
+            f"<div style='color:{C['cyan']}; font-size:0.85rem; font-weight:600; "
+            f"margin-top:0.8rem; margin-bottom:0.2rem;'>🎯 Meta de emagrecimento (para o plano clínico)</div>",
+            unsafe_allow_html=True,
+        )
+        peso_meta_default = peso_meta_saudavel(height)
+        col_m1, col_m2, col_m3 = st.columns([1, 1, 2])
+        with col_m1:
+            peso_meta = st.number_input(
+                "Peso-meta (kg)",
+                min_value=30.0, max_value=200.0,
+                value=float(min(weight, peso_meta_default)),
+                step=0.5,
+                help=f"Sugestão padrão: {peso_meta_default} kg (IMC saudável para sua altura).",
+            )
+        with col_m2:
+            prazo_semanas = st.number_input(
+                "Prazo (semanas)",
+                min_value=4, max_value=104, value=12, step=1,
+                help="Em quantas semanas o paciente quer atingir o peso-meta.",
+            )
+        with col_m3:
             st.write("")
             st.write("")
             predict_btn = st.button("🔍 Analisar Paciente", use_container_width=True)
@@ -1224,17 +1522,65 @@ with tab_clinica:
                 result_pred = predict_single(input_data, model, meta)
                 st.session_state.ultima_predicao = result_pred
                 nome_clean = (nome_paciente or "").strip()
+
+                # gerar plano clínico (TMB / dieta / exercício)
+                plano = gerar_plano_clinico(
+                    peso_atual=weight, peso_meta=peso_meta, altura_m=height,
+                    idade=age, gender=gender, faf=faf,
+                    intensidade=activity_intensity, prazo_semanas=int(prazo_semanas),
+                )
+                plano["peso_meta"] = peso_meta
+                plano["prazo_semanas"] = int(prazo_semanas)
+
+                # re-rodar modelo no peso-meta para projeção de melhora
+                input_meta = {**input_data, "Weight": peso_meta}
+                try:
+                    result_meta = predict_single(input_meta, model, meta)
+                except Exception:
+                    result_meta = None
+
                 st.session_state.dados_paciente = {
                     **input_data,
                     "nome": nome_clean,
+                    "cpf": limpar_cpf(cpf_input),
                     "water_liters": water_liters,
                     "activity_days": activity_days,
                     "activity_intensity": activity_intensity,
                     "screen_hours": screen_hours,
                     "bmi": bmi_preview,
+                    "plano": plano,
+                    "result_meta": result_meta,
+                    "peso_meta": peso_meta,
+                    "prazo_semanas": int(prazo_semanas),
                 }
                 label_pred = result_pred["label_pt"]
                 probs_pred = result_pred["probabilities"]
+
+                # persistir no banco JSON se CPF for válido
+                cpf_clean = limpar_cpf(cpf_input)
+                persistido = False
+                if cpf_clean and validar_cpf(cpf_clean):
+                    salvar_paciente(cpf_clean, {
+                        **input_data,
+                        "nome": nome_clean,
+                        "water_liters": water_liters,
+                        "activity_days": activity_days,
+                        "activity_intensity": activity_intensity,
+                        "screen_hours": screen_hours,
+                        "bmi": round(bmi_preview, 2),
+                        "diagnostico": label_pred,
+                        "confianca": f"{probs_pred[label_pred]:.1f}%",
+                        "plano": {
+                            "peso_meta": peso_meta,
+                            "prazo_semanas": int(prazo_semanas),
+                            "kcal_alvo": plano.get("kcal_alvo"),
+                            "tdee": plano.get("tdee"),
+                            "deficit_dia": plano.get("deficit_dia"),
+                            "perda_semanal": plano.get("perda_semanal"),
+                        },
+                    })
+                    persistido = True
+
                 st.session_state.historico.append({
                     "Hora":        datetime.now().strftime("%H:%M:%S"),
                     "Paciente":    nome_clean if nome_clean else "—",
@@ -1245,9 +1591,11 @@ with tab_clinica:
                     "Confiança":   f"{probs_pred[label_pred]:.1f}%",
                 })
                 quem = nome_clean if nome_clean else "Paciente"
+                msg_pers = (" · 💾 salvo no banco" if persistido
+                            else " · ⚠️ não salvo (CPF inválido/ausente)")
                 st.success(
                     f"✅ {quem} classificado como **{label_pred}** "
-                    f"({probs_pred[label_pred]:.1f}% de confiança) — role para baixo."
+                    f"({probs_pred[label_pred]:.1f}% de confiança){msg_pers} — role para baixo."
                 )
             except Exception as e:
                 st.error(f"Erro na predição: {e}")
@@ -1357,7 +1705,7 @@ with tab_clinica:
             unsafe_allow_html=True,
         )
 
-        # ── CONTEXTO + RECOMENDAÇÕES ───────────────────────────────
+        # ── CONTEXTO + RECOMENDAÇÕES BÁSICAS ───────────────────────
         col_d, col_re = st.columns(2)
         with col_d:
             st.markdown(f"""
@@ -1370,12 +1718,127 @@ with tab_clinica:
             rec_html = "".join(f"• {r}<br>" for r in recs)
             st.markdown(f"""
             <div class="info-card" style="--glow:{cor};">
-                <h4>📋 Recomendações Médicas</h4>
+                <h4>📋 Recomendações Clínicas Gerais</h4>
                 <p>{rec_html}</p>
             </div>
             """, unsafe_allow_html=True)
 
-        # ── PROBABILIDADES ─────────────────────────────────────────
+        # ── PLANO CLÍNICO PERSONALIZADO ───────────────────────────
+        plano = dp.get("plano", {})
+        st.markdown('<div class="section-title">Plano Clínico Personalizado — Dieta &amp; Exercício</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='ml-explain'><b>Como é calculado:</b> "
+            f"TMB pela fórmula de <b>Mifflin-St Jeor</b> "
+            f"(10·peso + 6,25·altura − 5·idade ± 161/M-F). "
+            f"<b>TDEE</b> = TMB × fator de atividade (FAF). "
+            f"Déficit calórico necessário = (peso a perder × 7.700 kcal) ÷ (prazo em dias). "
+            f"Split: <b>70% dieta · 30% exercício</b>. "
+            f"<b>Limites de segurança:</b> déficit máx. 1.000 kcal/dia · perda máx. 1 kg/semana · "
+            f"kcal mínima 1.500 (♂) / 1.200 (♀).</div>",
+            unsafe_allow_html=True,
+        )
+
+        if plano.get("manutencao"):
+            st.markdown(f"""
+            <div class="info-card" style="--glow:{C['green']};">
+                <h4>✅ Foco em Manutenção</h4>
+                <p>{plano.get('mensagem')}<br><br>
+                <b>TMB:</b> {plano['tmb']} kcal · <b>TDEE:</b> {plano['tdee']} kcal/dia ·
+                <b>Meta calórica:</b> {plano['kcal_alvo']} kcal/dia (manutenção do peso atual).</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            # KPIs do plano
+            kc1, kc2, kc3, kc4 = st.columns(4)
+            with kc1:
+                st.markdown(f"""
+                <div class="kpi-card" style="--glow:{C['cyan']};">
+                    <div class="kpi-label">🔥 TDEE</div>
+                    <div class="kpi-value">{plano['tdee']}</div>
+                    <div class="kpi-sub">kcal/dia gasto total</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with kc2:
+                st.markdown(f"""
+                <div class="kpi-card" style="--glow:{C['orange']};">
+                    <div class="kpi-label">⬇️ DÉFICIT</div>
+                    <div class="kpi-value">{plano['deficit_dia']}</div>
+                    <div class="kpi-sub">kcal/dia abaixo do TDEE</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with kc3:
+                st.markdown(f"""
+                <div class="kpi-card" style="--glow:{C['green']};">
+                    <div class="kpi-label">🍽️ META KCAL</div>
+                    <div class="kpi-value">{plano['kcal_alvo']}</div>
+                    <div class="kpi-sub">kcal/dia a consumir</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with kc4:
+                st.markdown(f"""
+                <div class="kpi-card" style="--glow:{C['purple']};">
+                    <div class="kpi-label">⚖️ PERDA SEM.</div>
+                    <div class="kpi-value">{plano['perda_semanal']}</div>
+                    <div class="kpi-sub">kg/semana projetado</div>
+                </div>
+                """, unsafe_allow_html=True)
+            st.markdown(
+                "<div class='chart-caption'><b>Como ler:</b> <b>TDEE</b> é o gasto total estimado. "
+                "<b>Déficit</b> é o quanto comer abaixo desse gasto. <b>Meta kcal</b> = TDEE − Déficit. "
+                "<b>Perda semanal</b> é a projeção realista de perda de gordura.</div>",
+                unsafe_allow_html=True,
+            )
+
+            # Cards Dieta + Exercício
+            col_diet, col_ex = st.columns(2)
+            with col_diet:
+                st.markdown(f"""
+                <div class="info-card" style="--glow:{C['green']};">
+                    <h4>🍽️ Plano Alimentar</h4>
+                    <p>
+                        <b>Meta diária:</b> {plano['kcal_alvo']} kcal<br>
+                        <b>Distribuição sugerida:</b><br>
+                        • 4-5 refeições/dia<br>
+                        • {ncp} principais (mantendo o atual)<br>
+                        • Carboidratos: 40-50% ({int(plano['kcal_alvo']*0.45/4)} g)<br>
+                        • Proteínas: 25-30% ({int(plano['kcal_alvo']*0.27/4)} g) — priorizar magras<br>
+                        • Gorduras boas: 25-30% ({int(plano['kcal_alvo']*0.27/9)} g)<br>
+                        • Água: ≥ 2,5 L/dia (atual: {water_liters:.1f} L)<br>
+                        • Vegetais: aumentar para sempre nas refeições<br>
+                        • Evitar ultraprocessados e açúcares simples
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            with col_ex:
+                st.markdown(f"""
+                <div class="info-card" style="--glow:{C['orange']};">
+                    <h4>🏃 Plano de Exercício</h4>
+                    <p>
+                        <b>Meta semanal:</b> {plano['exercicio_min_semana']} min<br>
+                        <b>Distribuição sugerida:</b><br>
+                        • {plano['dias_exercicio_semana']} dias/semana<br>
+                        • ≈ {plano['exercicio_min_por_sessao']} min por sessão<br>
+                        • Intensidade: <b>{plano['intensidade'].capitalize()}</b><br>
+                        • Queima alvo: {plano['exercicio_kcal_dia']} kcal/dia<br>
+                        • Sugestões: caminhada rápida, bike, corrida leve, natação<br>
+                        • Incluir 2× musculação/semana para preservar massa magra<br>
+                        • Aquecer 5 min antes e alongar 5 min depois
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # alertas
+            if plano.get("alertas"):
+                alertas_html = "<br>".join(plano["alertas"])
+                st.markdown(f"""
+                <div class="info-card" style="--glow:{C['red']}; margin-top:0.6rem;">
+                    <h4>⚠️ Alertas Clínicos do Plano</h4>
+                    <p>{alertas_html}</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # ── PROBABILIDADES + PROJEÇÃO DE MELHORA ──────────────────
         st.markdown('<div class="section-title">Distribuição de Probabilidades</div>',
                     unsafe_allow_html=True)
         st.markdown(
@@ -1401,14 +1864,416 @@ with tab_clinica:
             height=400, margin=dict(t=20, b=10),
         )
         st.plotly_chart(fig_p, use_container_width=True)
+        st.markdown(
+            "<div class='chart-caption'><b>Como ler:</b> cada barra é a chance de o paciente pertencer àquela classe. "
+            "A barra mais alta é o diagnóstico final.</div>",
+            unsafe_allow_html=True,
+        )
+
+        # ── Projeção de melhora (após o plano) ────────────────────
+        st.markdown('<div class="section-title">Projeção de Melhora com o Plano</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            "<div class='ml-explain'><b>O que mostra?</b> Como o paciente progride se seguir o plano "
+            "de dieta e exercício. <b>Como é calculado:</b> a probabilidade de melhorar de classe é "
+            "obtida <b>re-rodando o modelo XGBoost com o peso-meta</b> (mantendo os demais hábitos) — "
+            "mostra a classe que o paciente passaria a integrar ao atingir o peso saudável.</div>",
+            unsafe_allow_html=True,
+        )
+
+        result_meta = dp.get("result_meta")
+        if result_meta and not plano.get("manutencao"):
+            label_meta = result_meta["label_pt"]
+            prob_meta_classe = result_meta["probabilities"][label_meta]
+
+            # ordem de severidade para detectar melhora
+            ordem = {c: i for i, c in enumerate(TARGET_LABELS_PT)}
+            melhorou = ordem[label_meta] < ordem[label]
+
+            perda_sem = plano.get("perda_semanal", 0)
+            prazo = plano.get("prazo_semanas", 0)
+
+            # tempo até IMC saudável (24,9) considerando perda semanal projetada
+            peso_saud = peso_meta_saudavel(dp["Height"])
+            if perda_sem > 0 and dp["Weight"] > peso_saud:
+                semanas_ate_saud = (dp["Weight"] - peso_saud) / perda_sem
+            else:
+                semanas_ate_saud = 0
+
+            cor_melhora = C["green"] if melhorou else C["yellow"]
+
+            pmc1, pmc2, pmc3 = st.columns(3)
+            with pmc1:
+                st.markdown(f"""
+                <div class="kpi-card" style="--glow:{C['cyan']};">
+                    <div class="kpi-label">⚖️ PERDA SEMANAL</div>
+                    <div class="kpi-value">{perda_sem:.2f}</div>
+                    <div class="kpi-sub">kg/semana seguindo o plano</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with pmc2:
+                st.markdown(f"""
+                <div class="kpi-card" style="--glow:{cor_melhora};">
+                    <div class="kpi-label">📈 PROB. NOVA CLASSE</div>
+                    <div class="kpi-value">{prob_meta_classe:.1f}%</div>
+                    <div class="kpi-sub">chance de ser <b>{label_meta}</b> no peso-meta</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with pmc3:
+                txt_semanas = (f"{semanas_ate_saud:.0f}"
+                               if semanas_ate_saud > 0 else "—")
+                st.markdown(f"""
+                <div class="kpi-card" style="--glow:{C['green']};">
+                    <div class="kpi-label">⏳ TEMPO ATÉ IMC ≤ 25</div>
+                    <div class="kpi-value">{txt_semanas}</div>
+                    <div class="kpi-sub">semanas (no ritmo projetado)</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            transicao_txt = (f"<b style='color:{C['red']};'>{label}</b> → "
+                             f"<b style='color:{cor_melhora};'>{label_meta}</b>"
+                             if melhorou else
+                             f"<b>{label}</b> → <b>{label_meta}</b> (sem mudança de classe — "
+                             f"o peso-meta ainda está na mesma categoria)")
+            st.markdown(f"""
+            <div class="info-card" style="--glow:{cor_melhora}; margin-top:0.6rem;">
+                <h4>🎯 Trajetória Projetada</h4>
+                <p>
+                    Ao atingir o peso-meta de <b>{dp['peso_meta']:.1f} kg</b> em
+                    <b>{prazo} semanas</b>, o paciente passa de:<br>
+                    {transicao_txt}<br><br>
+                    <b>Recomendação:</b> reavaliar a cada 4-6 semanas, ajustar
+                    intensidade do plano conforme adesão e progresso real.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown(
+                "<div class='chart-caption'><b>Como ler:</b> os 3 cards combinam o plano clínico com o modelo. "
+                "A 1ª métrica vem do cálculo de déficit calórico; "
+                "a 2ª vem do XGBoost rodado no peso-meta; "
+                "a 3ª projeta linearmente quantas semanas para atingir IMC ≤ 25.</div>",
+                unsafe_allow_html=True,
+            )
 
 
 # ╔════════════════════════════════════════════════════════════════════╗
-# ║ ABA 3 — INSIGHTS DO MODELO                                          ║
+# ║ ABA 3 — HISTÓRICO (acompanhamento por CPF)                          ║
 # ╚════════════════════════════════════════════════════════════════════╝
 
-with tab_insights:
-    # ── 1. Breve descrição dos 3 modelos ─────────────────────────
+with tab_hist:
+    st.markdown(
+        "<div class='ml-explain'>📂 <b>Banco de pacientes</b> — registros persistidos em "
+        "<code>pacientes.json</code> e indexados pelo CPF. Cada avaliação na aba "
+        "<b>Análise Clínica</b> com CPF válido gera um novo registro de acompanhamento.</div>",
+        unsafe_allow_html=True,
+    )
+
+    db_pacientes = carregar_pacientes()
+    total_cpfs = len(db_pacientes)
+    total_avals = sum(len(v) for v in db_pacientes.values())
+
+    k1, k2, k3 = st.columns(3)
+    with k1:
+        st.markdown(f"""
+        <div class="kpi-card" style="--glow:{C['purple']};">
+            <div class="kpi-label">👥 Pacientes Cadastrados</div>
+            <div class="kpi-value">{total_cpfs}</div>
+            <div class="kpi-sub">CPFs únicos no banco</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with k2:
+        st.markdown(f"""
+        <div class="kpi-card" style="--glow:{C['cyan']};">
+            <div class="kpi-label">📊 Avaliações Totais</div>
+            <div class="kpi-value">{total_avals}</div>
+            <div class="kpi-sub">somando todos os pacientes</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with k3:
+        avg = (total_avals / total_cpfs) if total_cpfs else 0
+        st.markdown(f"""
+        <div class="kpi-card" style="--glow:{C['green']};">
+            <div class="kpi-label">📈 Média por Paciente</div>
+            <div class="kpi-value">{avg:.1f}</div>
+            <div class="kpi-sub">avaliações por CPF</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    if not db_pacientes:
+        st.markdown(f"""
+        <div class="info-card" style="--glow:{C['primary']};">
+            <h4>📋 Banco vazio</h4>
+            <p>Nenhum paciente cadastrado ainda. Vá para a aba 🩺 <b>Análise Clínica</b>,
+            informe um <b>CPF válido</b>, preencha os dados e clique em <b>Analisar</b>.
+            O registro será salvo automaticamente aqui.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # ── Filtro por CPF ─────────────────────────────────────────
+        st.markdown('<div class="section-title">Filtrar por CPF</div>', unsafe_allow_html=True)
+        cpfs_opts = ["— Todos —"] + [formatar_cpf_visual(c) for c in sorted(db_pacientes.keys())]
+        cpf_filtro = st.selectbox(
+            "Selecione o paciente",
+            cpfs_opts,
+            key="hist_cpf_filter",
+            help="Filtre por CPF para ver a evolução de um paciente específico ou visualize todos.",
+        )
+
+        # ── Montagem do dataframe ──────────────────────────────────
+        registros = []
+        for cpf, lista in db_pacientes.items():
+            for r in lista:
+                registros.append({
+                    "CPF": formatar_cpf_visual(cpf),
+                    "Data": pd.to_datetime(r.get("timestamp")),
+                    "Nome": r.get("nome") or "—",
+                    "Gênero": "M" if r.get("Gender") == "Male" else "F",
+                    "Idade": r.get("Age"),
+                    "Altura (m)": r.get("Height"),
+                    "Peso (kg)": r.get("Weight"),
+                    "IMC": round(r.get("bmi", 0), 1),
+                    "Diagnóstico": r.get("diagnostico", "—"),
+                    "Confiança": r.get("confianca", "—"),
+                    "Água (L)": r.get("water_liters"),
+                    "Exercício (dias/sem)": r.get("activity_days"),
+                    "Intensidade": r.get("activity_intensity", "—"),
+                    "Tela (h/dia)": r.get("screen_hours"),
+                    "Refeições/dia": r.get("NCP"),
+                    "Hist. Familiar": "Sim" if r.get("family_history") == "yes" else "Não",
+                    "Calóricos (FAVC)": "Sim" if r.get("FAVC") == "yes" else "Não",
+                    "Fuma": "Sim" if r.get("SMOKE") == "yes" else "Não",
+                    "Álcool": r.get("CALC", "—"),
+                    "Transporte": r.get("MTRANS", "—"),
+                    "Meta peso (kg)": (r.get("plano") or {}).get("peso_meta"),
+                    "Prazo (sem)": (r.get("plano") or {}).get("prazo_semanas"),
+                })
+
+        df_h = pd.DataFrame(registros).sort_values("Data").reset_index(drop=True)
+
+        if cpf_filtro != "— Todos —":
+            df_h = df_h[df_h["CPF"] == cpf_filtro].reset_index(drop=True)
+
+        st.markdown('<div class="section-title">Registros do Acompanhamento</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            "<div class='chart-caption'><b>Como ler:</b> cada linha é uma avaliação individual. "
+            "Quando filtrado por CPF, as linhas mostram a evolução cronológica do paciente.</div>",
+            unsafe_allow_html=True,
+        )
+        df_show = df_h.copy()
+        df_show["Data"] = df_show["Data"].dt.strftime("%d/%m/%Y %H:%M")
+        df_show.index = range(1, len(df_show) + 1)
+        df_show.index.name = "#"
+        st.dataframe(df_show, use_container_width=True, height=320)
+
+        # ── Gráficos de evolução (apenas se CPF filtrado e ≥2 registros) ─
+        if cpf_filtro != "— Todos —" and len(df_h) >= 2:
+            st.markdown('<div class="section-title">Evolução do Paciente</div>',
+                        unsafe_allow_html=True)
+
+            # 1) Evolução do peso
+            fig_peso = go.Figure()
+            fig_peso.add_trace(go.Scatter(
+                x=df_h["Data"], y=df_h["Peso (kg)"],
+                mode="lines+markers",
+                line=dict(color=C["cyan"], width=3),
+                marker=dict(size=10, color=C["cyan"],
+                            line=dict(color=C["surface"], width=2)),
+                name="Peso",
+                hovertemplate="%{x|%d/%m/%Y}<br>%{y:.1f} kg<extra></extra>",
+            ))
+            # linha de meta (último registro)
+            meta_peso = df_h["Meta peso (kg)"].dropna()
+            if len(meta_peso):
+                fig_peso.add_hline(
+                    y=float(meta_peso.iloc[-1]),
+                    line_dash="dash", line_color=C["green"],
+                    annotation_text=f"Meta: {meta_peso.iloc[-1]:.1f} kg",
+                    annotation_position="top right",
+                    annotation_font_color=C["green"],
+                )
+            fig_peso.update_layout(
+                title=dict(text="📉 Peso ao Longo do Tempo", font=dict(color=C["text"])),
+                plot_bgcolor=C["surface"], paper_bgcolor=C["surface"],
+                font=dict(family="Inter", color=C["text"]),
+                xaxis=dict(gridcolor=C["border"], color=C["text_2"], title="Data"),
+                yaxis=dict(gridcolor=C["border"], color=C["text_2"], title="Peso (kg)"),
+                height=320, margin=dict(t=50, b=30),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_peso, use_container_width=True)
+            delta_peso = df_h["Peso (kg)"].iloc[-1] - df_h["Peso (kg)"].iloc[0]
+            sinal = "▼" if delta_peso < 0 else "▲"
+            cor_d = C["green"] if delta_peso < 0 else C["red"]
+            st.markdown(
+                f"<div class='chart-caption'><b>Como ler:</b> linha temporal do peso registrado. "
+                f"<b>Variação total:</b> "
+                f"<b style='color:{cor_d};'>{sinal} {abs(delta_peso):.1f} kg</b> "
+                f"entre a 1ª e a última avaliação. A linha tracejada verde indica a meta de peso vigente.</div>",
+                unsafe_allow_html=True,
+            )
+
+            # 2) Evolução do IMC com faixas OMS
+            fig_imc = go.Figure()
+            # faixas coloridas OMS
+            faixas_oms = [
+                (0, 18.5, "rgba(6,182,212,0.15)", "Abaixo"),
+                (18.5, 25, "rgba(16,185,129,0.15)", "Normal"),
+                (25, 30, "rgba(251,191,36,0.15)", "Sobrepeso"),
+                (30, 35, "rgba(239,68,68,0.15)", "Obes. I"),
+                (35, 40, "rgba(220,38,38,0.15)", "Obes. II"),
+                (40, 50, "rgba(153,27,27,0.15)", "Obes. III"),
+            ]
+            for lo, hi, cor_f, _ in faixas_oms:
+                fig_imc.add_hrect(y0=lo, y1=hi, fillcolor=cor_f, line_width=0)
+            fig_imc.add_trace(go.Scatter(
+                x=df_h["Data"], y=df_h["IMC"],
+                mode="lines+markers",
+                line=dict(color=C["purple"], width=3),
+                marker=dict(size=10, color=C["purple"],
+                            line=dict(color=C["surface"], width=2)),
+                hovertemplate="%{x|%d/%m/%Y}<br>IMC %{y:.1f}<extra></extra>",
+            ))
+            fig_imc.update_layout(
+                title=dict(text="📊 IMC ao Longo do Tempo (faixas OMS)", font=dict(color=C["text"])),
+                plot_bgcolor=C["surface"], paper_bgcolor=C["surface"],
+                font=dict(family="Inter", color=C["text"]),
+                xaxis=dict(gridcolor=C["border"], color=C["text_2"], title="Data"),
+                yaxis=dict(gridcolor=C["border"], color=C["text_2"],
+                           title="IMC (kg/m²)", range=[15, max(40, df_h["IMC"].max()+3)]),
+                height=320, margin=dict(t=50, b=30),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_imc, use_container_width=True)
+            delta_imc = df_h["IMC"].iloc[-1] - df_h["IMC"].iloc[0]
+            sinal_i = "▼" if delta_imc < 0 else "▲"
+            cor_i = C["green"] if delta_imc < 0 else C["red"]
+            st.markdown(
+                f"<div class='chart-caption'><b>Como ler:</b> evolução do IMC com as faixas oficiais da OMS no fundo "
+                f"(verde = saudável, amarelo = sobrepeso, vermelho = obesidade). "
+                f"<b>Variação total:</b> <b style='color:{cor_i};'>{sinal_i} {abs(delta_imc):.1f} kg/m²</b>.</div>",
+                unsafe_allow_html=True,
+            )
+
+            # 3) Evolução dos hábitos (radar 1ª vs última)
+            primeiro = df_h.iloc[0]
+            ultimo = df_h.iloc[-1]
+            cat = ["Água (L)", "Exercício (dias/sem)", "Refeições/dia",
+                   "Tela (h/dia)", "Idade"]
+            v1 = [primeiro["Água (L)"] or 0, primeiro["Exercício (dias/sem)"] or 0,
+                  primeiro["Refeições/dia"] or 0, primeiro["Tela (h/dia)"] or 0,
+                  primeiro["Idade"] or 0]
+            v2 = [ultimo["Água (L)"] or 0, ultimo["Exercício (dias/sem)"] or 0,
+                  ultimo["Refeições/dia"] or 0, ultimo["Tela (h/dia)"] or 0,
+                  ultimo["Idade"] or 0]
+
+            fig_hab = go.Figure()
+            fig_hab.add_trace(go.Scatterpolar(
+                r=v1 + [v1[0]], theta=cat + [cat[0]],
+                fill="toself", name=f"1ª avaliação ({primeiro['Data'].strftime('%d/%m/%Y')})",
+                line_color=C["orange"], fillcolor="rgba(249,115,22,0.25)",
+            ))
+            fig_hab.add_trace(go.Scatterpolar(
+                r=v2 + [v2[0]], theta=cat + [cat[0]],
+                fill="toself", name=f"Última ({ultimo['Data'].strftime('%d/%m/%Y')})",
+                line_color=C["cyan"], fillcolor="rgba(6,182,212,0.25)",
+            ))
+            fig_hab.update_layout(
+                title=dict(text="🏃 Hábitos: 1ª avaliação vs Última", font=dict(color=C["text"])),
+                polar=dict(
+                    bgcolor=C["surface"],
+                    radialaxis=dict(visible=True, color=C["text_2"], gridcolor=C["border"]),
+                    angularaxis=dict(color=C["text"], gridcolor=C["border"]),
+                ),
+                paper_bgcolor=C["surface"],
+                font=dict(family="Inter", color=C["text"]),
+                height=400, margin=dict(t=60, b=30),
+                legend=dict(orientation="h", y=-0.1),
+            )
+            st.plotly_chart(fig_hab, use_container_width=True)
+            st.markdown(
+                "<div class='chart-caption'><b>Como ler:</b> radar comparando os hábitos do paciente entre a 1ª e a última "
+                "avaliação. Quanto maior a área, mais intensa a presença daquele hábito. "
+                "Ideal: aumentar Água/Exercício e reduzir Tela.</div>",
+                unsafe_allow_html=True,
+            )
+
+        elif cpf_filtro != "— Todos —" and len(df_h) == 1:
+            st.markdown(f"""
+            <div class="info-card" style="--glow:{C['yellow']};">
+                <h4>ℹ️ Apenas 1 avaliação registrada para este CPF</h4>
+                <p>Os gráficos de evolução só aparecem quando há <b>2 ou mais avaliações</b>.
+                Volte na aba <b>Análise Clínica</b> e cadastre uma nova avaliação para visualizar a progressão.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── Exportações ────────────────────────────────────────────
+        st.markdown('<div class="section-title">Exportar Dados</div>', unsafe_allow_html=True)
+
+        csv = df_show.to_csv(index=True).encode("utf-8")
+        nome_arq = (cpf_filtro.replace(".", "").replace("-", "")
+                    if cpf_filtro != "— Todos —" else "todos")
+
+        ex_col1, ex_col2, ex_col3 = st.columns([1, 1, 3])
+        with ex_col1:
+            st.download_button(
+                "⬇️ Exportar CSV",
+                data=csv,
+                file_name=f"historico_{nome_arq}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with ex_col2:
+            pdf_hist_bytes = gerar_pdf_historico(df_h, cpf_filtro)
+            st.download_button(
+                "📄 Exportar PDF",
+                data=pdf_hist_bytes,
+                file_name=f"historico_{nome_arq}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
+
+# ╔════════════════════════════════════════════════════════════════════╗
+# ║ ABA 4 — MODELO & SOBRE (unificada)                                  ║
+# ╚════════════════════════════════════════════════════════════════════╝
+
+with tab_modelo:
+    # ── 1. Objetivo ────────────────────────────────────────────────
+    st.markdown(f"""
+    <div class="info-card" style="--glow:{C['cyan']};
+        padding: 1.6rem 1.8rem; border-left: 5px solid {C['cyan']};">
+        <h4 style="font-size:1.25rem; margin-bottom:0.6rem;">🎯 Objetivo</h4>
+        <p style="font-size:1rem; line-height:1.55;">
+            Sistema de <b>apoio à decisão clínica</b> que classifica pacientes em
+            <b>7 níveis de obesidade</b> a partir de <b>16 variáveis</b> clínicas e comportamentais.
+            Foco em <b>identificação precoce</b> de risco metabólico para
+            direcionar intervenções personalizadas em ambiente hospitalar.<br><br>
+            Desenvolvido para o <b>Tech Challenge Fase 04</b> — POS TECH Data Analytics (FIAP).
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── 2. Dataset | Modelo ────────────────────────────────────────
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"""
+        <div class="info-card" style="--glow:{C['purple']};">
+            <h4>📊 Dataset</h4>
+            <p>2.111 pacientes · 17 colunas · 0 valores ausentes. Origem: UCI ML Repository.
+            7 classes balanceadas entre 272 e 351 pacientes por classe.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div class="info-card" style="--glow:{C['green']};">
+            <h4>🧠 Modelo</h4>
+            <p>XGBoost · 300 árvores · profundidade 6 · learning rate 0,1.
+            Acurácia: 98,1% (teste) · 98,6% ± 0,7% (Cross-Val 5-fold).</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── 3. Algoritmos avaliados ────────────────────────────────────
     st.markdown('<div class="section-title">Algoritmos Avaliados</div>',
                 unsafe_allow_html=True)
     st.markdown(f"""
@@ -1422,7 +2287,7 @@ with tab_insights:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── 2. Comparativo dos modelos ───────────────────────────────
+    # ── 4. Comparativo dos modelos ─────────────────────────────────
     st.markdown('<div class="section-title">Comparativo de Desempenho</div>',
                 unsafe_allow_html=True)
 
@@ -1457,7 +2322,7 @@ with tab_insights:
         unsafe_allow_html=True,
     )
 
-    # ── 3. Explicação das variáveis ──────────────────────────────
+    # ── 5. Variáveis do modelo ─────────────────────────────────────
     st.markdown('<div class="section-title">Variáveis do Modelo (16 features)</div>',
                 unsafe_allow_html=True)
     st.markdown(
@@ -1487,7 +2352,7 @@ with tab_insights:
     ], columns=["Variável", "Descrição clínica", "Tipo"])
     st.dataframe(variaveis_df, use_container_width=True, hide_index=True)
 
-    # ── 4. Feature importance ────────────────────────────────────
+    # ── 6. Feature importance ──────────────────────────────────────
     st.markdown('<div class="section-title">Importância das Variáveis (XGBoost)</div>',
                 unsafe_allow_html=True)
     st.markdown(
@@ -1516,113 +2381,14 @@ with tab_insights:
         margin=dict(l=10, r=80, t=10, b=10),
     )
     st.plotly_chart(fig_fi, use_container_width=True)
-
-
-# ╔════════════════════════════════════════════════════════════════════╗
-# ║ ABA 4 — HISTÓRICO                                                   ║
-# ╚════════════════════════════════════════════════════════════════════╝
-
-with tab_hist:
     st.markdown(
-        "<div class='ml-explain'>Histórico de análises realizadas nesta sessão do navegador. "
-        "Não é persistido no servidor — fechar o navegador limpa os dados.</div>",
+        f"<div class='chart-caption'><b>Como ler:</b> quanto maior a barra, mais a variável pesa nas decisões "
+        f"do modelo. <b>BMI</b> é dominante (combina peso e altura). "
+        f"Variáveis comportamentais ajustam a classe final em pacientes-limítrofes.</div>",
         unsafe_allow_html=True,
     )
 
-    if not st.session_state.historico:
-        st.markdown(f"""
-        <div class="info-card" style="--glow:{C['primary']};">
-            <h4>📋 Histórico vazio</h4>
-            <p>Nenhuma análise registrada ainda. Vá para a aba 🩺 <b>Análise Clínica</b>,
-            preencha os dados do paciente e clique em <b>Analisar</b>.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        df_h = pd.DataFrame(st.session_state.historico)
-        # garante coluna Paciente (retrocompat para entradas antigas sem ela)
-        if "Paciente" not in df_h.columns:
-            df_h["Paciente"] = "—"
-        df_h["Paciente"] = df_h["Paciente"].fillna("—").replace("", "—")
-        # ordem desejada
-        col_order = ["Hora", "Paciente", "Gênero", "Idade", "IMC", "Diagnóstico", "Confiança"]
-        df_h = df_h[[c for c in col_order if c in df_h.columns]]
-        df_h.index = range(1, len(df_h) + 1)
-        df_h.index.name = "#"
-        st.dataframe(df_h, use_container_width=True)
-
-        if st.button("🗑️ Limpar Histórico"):
-            st.session_state.historico = []
-            st.rerun()
-
-        if len(df_h) >= 2:
-            st.markdown('<div class="section-title">Distribuição dos Diagnósticos da Sessão</div>',
-                        unsafe_allow_html=True)
-            cnt = df_h["Diagnóstico"].value_counts().reset_index()
-            cnt.columns = ["Diagnóstico", "Qtd"]
-            cnt["cor"] = cnt["Diagnóstico"].map(CLASS_COLORS)
-            fig_h = go.Figure(go.Bar(
-                x=cnt["Diagnóstico"], y=cnt["Qtd"],
-                marker_color=cnt["cor"], marker_line_color=C['surface'], marker_line_width=2,
-                text=cnt["Qtd"], textposition="outside", textfont=dict(color=C['text']),
-            ))
-            fig_h.update_layout(
-                plot_bgcolor=C['surface'], paper_bgcolor=C['surface'],
-                font=dict(family="Inter", color=C['text']),
-                yaxis=dict(gridcolor=C['border'], color=C['text_2']),
-                xaxis=dict(color=C['text_2']),
-                height=320, margin=dict(t=20, b=10),
-            )
-            st.plotly_chart(fig_h, use_container_width=True)
-
-        csv = df_h.to_csv().encode("utf-8")
-        st.download_button(
-            "⬇️ Exportar CSV",
-            data=csv,
-            file_name=f"historico_obesityiq_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv",
-        )
-
-
-# ╔════════════════════════════════════════════════════════════════════╗
-# ║ ABA 5 — SOBRE                                                       ║
-# ╚════════════════════════════════════════════════════════════════════╝
-
-with tab_sobre:
-    # ── Linha 1: Objetivo em destaque (full-width) ─────────────────
-    st.markdown(f"""
-    <div class="info-card" style="--glow:{C['cyan']};
-        padding: 1.6rem 1.8rem; border-left: 5px solid {C['cyan']};">
-        <h4 style="font-size:1.25rem; margin-bottom:0.6rem;">🎯 Objetivo</h4>
-        <p style="font-size:1rem; line-height:1.55;">
-            Sistema de <b>apoio à decisão clínica</b> que classifica pacientes em
-            <b>7 níveis de obesidade</b> a partir de <b>16 variáveis</b> clínicas e comportamentais.
-            Foco em <b>identificação precoce</b> de risco metabólico para
-            direcionar intervenções personalizadas em ambiente hospitalar.<br><br>
-            Desenvolvido para o <b>Tech Challenge Fase 04</b> — POS TECH Data Analytics (FIAP).
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Linha 2: Dataset | Modelo ─────────────────────────────────
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"""
-        <div class="info-card" style="--glow:{C['purple']};">
-            <h4>📊 Dataset</h4>
-            <p>2.111 pacientes · 17 colunas · 0 valores ausentes. Origem: UCI ML Repository.
-            7 classes balanceadas entre 272 e 351 pacientes por classe.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"""
-        <div class="info-card" style="--glow:{C['green']};">
-            <h4>🧠 Modelo</h4>
-            <p>XGBoost · 300 árvores · profundidade 6 · learning rate 0,1.
-            Acurácia: 98,1% (teste) · 98,6% ± 0,7% (Cross-Val 5-fold).</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # ── Linha 3: Feature Eng | Stack | Aviso Médico ───────────────
+    # ── 7. Feature Eng | Stack | Aviso ─────────────────────────────
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown(f"""
@@ -1651,11 +2417,15 @@ with tab_sobre:
         </div>
         """, unsafe_allow_html=True)
 
+    # ── 8. Glossário ───────────────────────────────────────────────
     st.markdown('<div class="section-title">Glossário Técnico</div>', unsafe_allow_html=True)
     gloss = {
         "IMC (BMI)":          "Peso (kg) ÷ Altura² (m²). Indicador clínico clássico recomendado pela OMS.",
+        "TMB (Mifflin-St Jeor)": "Taxa Metabólica Basal: kcal mínimas para manter funções vitais em repouso.",
+        "TDEE":               "Total Daily Energy Expenditure: TMB × fator de atividade — kcal consumidas no dia.",
+        "Déficit Calórico":   "Diferença negativa entre kcal consumidas e gastas. 7.700 kcal ≈ 1 kg de gordura.",
         "Acurácia":           "% de classificações corretas sobre o total de amostras testadas.",
-        "Cross-Validation":   "Divide o treino em K partes (folds), treina K vezes alternando qual é validação. Mede generalização.",
+        "Cross-Validation":   "Divide o treino em K partes (folds), treina K vezes alternando qual é validação.",
         "Feature Importance": "Métrica que indica quanto cada variável contribui para as decisões do modelo.",
         "XGBoost":            "Extreme Gradient Boosting. Treina árvores sequencialmente, cada uma corrigindo erros das anteriores.",
         "Holdout":            "20% dos dados reservados para teste final, nunca vistos no treinamento.",
